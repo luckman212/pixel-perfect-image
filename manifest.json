@@ -1,0 +1,11 @@
+{
+	"id": "pixel-perfect-image",
+	"name": "Pixel Perfect Image",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Right-click images to resize them to their natural dimensions",
+	"author": "Your Name",
+    "authorUrl": "https://obsidian.md",
+    "fundingUrl": "https://obsidian.md/pricing",
+	"isDesktopOnly": false
+}
