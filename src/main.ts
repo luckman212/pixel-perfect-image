@@ -5,6 +5,8 @@ import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTa
 const RESIZE_PERCENTAGES = [100, 50, 25] as const;
 /** Regular expression to match Obsidian image wikilinks: ![[image.png]] */
 const IMAGE_WIKILINK_REGEX = /(!\[\[)([^\]]+)(\]\])/g;
+/** Regular expressions to match both image link styles */
+const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
 
 export default class PixelPerfectImage extends Plugin {
 	settings: PixelPerfectImageSettings;
@@ -122,25 +124,17 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private async resizeImage(ev: MouseEvent, percentage: number) {
 		const img = ev.target as HTMLImageElement;
-		let alt = img.getAttribute('alt');
 		const src = img.getAttribute('src') ?? "";
-
-		// Try to get alt text from src if not explicitly set
-		if (!alt) {
-			alt = this.parseFileNameFromSrc(src);
-			if (!alt) {
-				throw new Error("Unable to determine the image name from alt or src.");
-			}
-		}
 
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			throw new Error("No active file in workspace to update a link.");
 		}
 
-		const imgFile = this.app.metadataCache.getFirstLinkpathDest(alt, activeFile.path);
+		// Use getFileForImage instead of trying to resolve from alt text
+		const imgFile = this.getFileForImage(img, activeFile);
 		if (!imgFile) {
-			throw new Error(`Could not find a TFile for '${alt}'`);
+			throw new Error("Could not find the image file");
 		}
 
 		const { width } = await this.readImageDimensions(imgFile);
@@ -221,14 +215,15 @@ export default class PixelPerfectImage extends Plugin {
 		const docText = editor.getValue();
 
 		let didChange = false;
-
-		const replacedText = docText.replace(IMAGE_WIKILINK_REGEX, (_, opening, linkInner, closing) => {
+		
+		// First handle wiki-style links
+		let replacedText = docText.replace(IMAGE_WIKILINK_REGEX, (_, opening, linkInner, closing) => {
 			// Handle subpath components (e.g., #heading)
-			let [ linkWithoutHash, hashPart ] = linkInner.split("#", 2);
+			let [linkWithoutHash, hashPart] = linkInner.split("#", 2);
 			if (hashPart) hashPart = "#" + hashPart;
 
 			// Split link path and parameters
-			let [ linkPath, ...pipeParams ] = linkWithoutHash.split("|");
+			let [linkPath, ...pipeParams] = linkWithoutHash.split("|");
 
 			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
 			if (!resolvedFile || resolvedFile.path !== imageFile.path) {
@@ -242,6 +237,29 @@ export default class PixelPerfectImage extends Plugin {
 
 			didChange = true;
 			return `${opening}${updatedInner}${closing}`;
+		});
+
+		// Then handle Markdown-style links
+		replacedText = replacedText.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
+			// Split description and width parameter
+			let [desc, ...pipeParams] = description.split("|");
+			
+			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
+			if (!resolvedFile || resolvedFile.path !== imageFile.path) {
+				return match;
+			}
+
+			// If there's no description, use the filename without extension
+			if (!desc) {
+				desc = resolvedFile.basename;
+			}
+
+			// Update or add width parameter
+			pipeParams[0] = String(newWidth);
+
+			const newDescription = [desc, ...pipeParams].join("|");
+			didChange = true;
+			return `![${newDescription}](${linkPath})`;
 		});
 
 		if (didChange && replacedText !== docText) {
@@ -271,15 +289,23 @@ export default class PixelPerfectImage extends Plugin {
 	 * @returns The corresponding TFile or null if not found
 	 */
 	private getFileForImage(img: HTMLImageElement, activeFile: TFile): TFile | null {
-		const alt = img.getAttribute('alt');
 		const src = img.getAttribute('src') ?? "";
+		const wikiLink = img.getAttribute('alt'); // 'alt' attribute contains the wiki-style link
 
-		const fileName = alt || this.parseFileNameFromSrc(src);
-		if (!fileName) {
-			this.debugLog("No alt or valid src filename found. Cannot map image to file.");
-			return null;
+		// For Markdown-style links, use the src since it contains the actual path
+		const srcFileName = this.parseFileNameFromSrc(src);
+		if (srcFileName) {
+			const fileFromSrc = this.app.metadataCache.getFirstLinkpathDest(srcFileName, activeFile.path);
+			if (fileFromSrc) return fileFromSrc;
 		}
 
-		return this.app.metadataCache.getFirstLinkpathDest(fileName, activeFile.path);
+		// For wiki-style links, use the link text
+		if (wikiLink) {
+			const fileFromLink = this.app.metadataCache.getFirstLinkpathDest(wikiLink, activeFile.path);
+			if (fileFromLink) return fileFromLink;
+		}
+
+		this.debugLog("Could not find file from either src or wiki link");
+		return null;
 	}
 }
