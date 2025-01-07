@@ -99,6 +99,25 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param ev - The original mouse event
 	 */
 	private addResizeMenuItems(menu: Menu, ev: MouseEvent): void {
+		// Add copy to clipboard option first
+		menu.addItem((item) => {
+			item.setTitle('Copy image')
+				.setIcon('copy')
+				.onClick(async () => {
+					try {
+						await this.copyImageToClipboard(ev.target as HTMLImageElement);
+						new Notice('Image copied to clipboard');
+					} catch (error) {
+						this.errorLog('Failed to copy image:', error);
+						new Notice('Failed to copy image to clipboard');
+					}
+				});
+		});
+
+		// Add separator
+		menu.addSeparator();
+
+		// Existing resize options
 		RESIZE_PERCENTAGES.forEach(percentage => {
 			menu.addItem((item) => {
 				item.setTitle(`Resize to ${percentage}%`)
@@ -112,6 +131,42 @@ export default class PixelPerfectImage extends Plugin {
 						}
 					});
 			});
+		});
+	}
+
+	/**
+	 * Copies an image to the system clipboard
+	 * @param targetImg - The HTML image element to copy
+	 */
+	private async copyImageToClipboard(targetImg: HTMLImageElement): Promise<void> {
+		const img = new Image();
+		img.crossOrigin = 'anonymous';
+
+		return new Promise((resolve, reject) => {
+			img.onload = async () => {
+				try {
+					const canvas = document.createElement('canvas');
+					canvas.width = img.naturalWidth;
+					canvas.height = img.naturalHeight;
+					const ctx = canvas.getContext('2d');
+					if (!ctx) {
+						throw new Error('Failed to get canvas context');
+					}
+
+					ctx.drawImage(img, 0, 0);
+					const dataURL = canvas.toDataURL();
+					const response = await fetch(dataURL);
+					const blob = await response.blob();
+					const item = new ClipboardItem({ [blob.type]: blob });
+					await navigator.clipboard.write([item]);
+					resolve();
+				} catch (error) {
+					reject(error);
+				}
+			};
+
+			img.onerror = () => reject(new Error('Failed to load image'));
+			img.src = targetImg.src;
 		});
 	}
 
