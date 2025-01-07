@@ -2,10 +2,10 @@
 	"id": "pixel-perfect-image",
 	"name": "Pixel Perfect Image",
 	"version": "1.0.0",
-	"minAppVersion": "0.15.0",
-	"description": "Right-click images to resize them to their natural dimensions",
-	"author": "Your Name",
-    "authorUrl": "https://obsidian.md",
-    "fundingUrl": "https://obsidian.md/pricing",
+	"minAppVersion": "1.4.4",
+	"description": "Resize images to pixel perfect dimensions, including 100%, 50% and 25%.",
+	"author": "Johan Sanneblad",
+	"authorUrl": "https://github.com/johansan",
+	"fundingUrl": "https://buymeacoffee.com/johansan",
 	"isDesktopOnly": false
 }
