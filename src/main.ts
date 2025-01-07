@@ -5,18 +5,14 @@ import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTa
 const RESIZE_PERCENTAGES = [100, 50, 25] as const;
 const IMAGE_WIKILINK_REGEX = /(!\[\[)([^\]]+)(\]\])/g;
 
-export default class PixelPerfectImagePlugin extends Plugin {
+export default class PixelPerfectImage extends Plugin {
 	settings: PixelPerfectImageSettings;
 
 	async onload() {
-		this.debugLog('PixelPerfectImage: Plugin loading...');
 		await this.loadSettings();
-
 		this.addSettingTab(new PixelPerfectImageSettingTab(this.app, this));
-
 		this.registerImageContextMenu();
-
-		this.debugLog('PixelPerfectImage: Plugin loaded successfully');
+		this.debugLog('Plugin loaded');
 	}
 
 	/**
@@ -29,16 +25,14 @@ export default class PixelPerfectImagePlugin extends Plugin {
 				return;
 			}
 
-			this.debugLog('PixelPerfectImage: Right-click on image detected', target);
-
 			// Prevent Obsidian's or the OS default context menu
 			ev.preventDefault();
 
 			const menu = new Menu();
-			await this.addDimensionsMenuItem(menu, target);
-			this.addResizeMenuItems(menu, ev);
+				await this.addDimensionsMenuItem(menu, target);
+				this.addResizeMenuItems(menu, ev);
 
-			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
+				menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
 		});
 	}
 
@@ -59,7 +53,7 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 			const imgFile = this.app.metadataCache.getFirstLinkpathDest(alt, activeFile.path);
 			if (!imgFile) {
-				this.debugLog('warn', `PixelPerfectImage: Could not find a TFile for '${alt}'`);
+				this.debugLog('Could not find file for', alt);
 				return;
 			}
 
@@ -71,7 +65,7 @@ export default class PixelPerfectImagePlugin extends Plugin {
 					.setDisabled(true);
 			});
 		} catch (error) {
-			this.debugLog('error', "PixelPerfectImage: Could not read dimensions for the image:", error);
+			this.errorLog('Could not read dimensions:', error);
 			new Notice("Could not read image dimensions");
 		}
 	}
@@ -88,7 +82,7 @@ export default class PixelPerfectImagePlugin extends Plugin {
 						try {
 							await this.resizeImage(ev, percentage);
 						} catch (error) {
-							this.debugLog('error', `Error resizing to ${percentage}%:`, error);
+							this.errorLog('Failed to resize:', error);
 							new Notice(`Failed to resize image to ${percentage}%`);
 						}
 					});
@@ -98,83 +92,52 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 	/**
 	 * Logs debug messages if debug mode is enabled.
-	 * @param levelOrMessage The log level ('log', 'warn', 'error') or the message if level is 'log'
-	 * @param args Additional arguments to log
 	 */
-	private debugLog(levelOrMessage: 'log' | 'warn' | 'error' | any, ...args: any[]) {
-		if (!this.settings?.debugMode) {
-			return;
-		}
-
-		let level: 'log' | 'warn' | 'error' = 'log';
-		let logArgs = [];
-
-		if (levelOrMessage === 'log' || levelOrMessage === 'warn' || levelOrMessage === 'error') {
-			level = levelOrMessage;
-			logArgs = args;
-		} else {
-			logArgs = [levelOrMessage, ...args];
-		}
-
-		switch (level) {
-			case 'warn':
-				console.warn(...logArgs);
-				break;
-			case 'error':
-				console.error(...logArgs);
-				break;
-			default:
-				console.log(...logArgs);
+	private debugLog(...args: any[]) {
+		if (this.settings.debugMode) {
+			const timestamp = new Date().toTimeString().split(' ')[0];
+			console.log(`${timestamp}`, ...args);
 		}
 	}
 
 	/**
+	 * Logs error messages.
+	 */
+	private errorLog(...args: any[]) {
+		const timestamp = new Date().toTimeString().split(' ')[0];
+		console.error(`${timestamp}`, ...args);
+	}
+
+	/**
 	 * Re-usable method to resize the image by a given percentage.
-	 * @param ev The mouse event that triggered the resize
-	 * @param percentage The percentage to resize the image to
-	 * @throws Error if the image cannot be resized
 	 */
 	private async resizeImage(ev: MouseEvent, percentage: number) {
 		const img = ev.target as HTMLImageElement;
 		let alt = img.getAttribute('alt');
 		const src = img.getAttribute('src') ?? "";
 
-		this.debugLog('PixelPerfectImage: alt/src attributes:', { alt, src });
-
 		// If the <img> tag doesn't have an explicit alt, attempt to parse the filename out of the src
 		if (!alt) {
 			alt = this.parseFileNameFromSrc(src);
 			if (!alt) {
-				const error = "Unable to determine the image name from alt or src.";
-				this.debugLog('warn', "PixelPerfectImage: " + error);
-				throw new Error(error);
+				throw new Error("Unable to determine the image name from alt or src.");
 			}
-			this.debugLog(`PixelPerfectImage: Derived alt from src -> ${alt}`);
 		}
 
 		// Identify the file that's currently being edited
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
-			const error = "No active file in workspace to update a link.";
-			this.debugLog('warn', "PixelPerfectImage: " + error);
-			throw new Error(error);
+			throw new Error("No active file in workspace to update a link.");
 		}
-
-		this.debugLog("PixelPerfectImage: Active file path:", activeFile.path);
 
 		// Attempt to resolve the image TFile via the alt text
 		const imgFile = this.app.metadataCache.getFirstLinkpathDest(alt, activeFile.path);
-		this.debugLog("PixelPerfectImage: Found image file:", imgFile);
-
 		if (!imgFile) {
-			const error = `Could not find a TFile for '${alt}'`;
-			this.debugLog('warn', `PixelPerfectImage: ${error}`);
-			throw new Error(error);
+			throw new Error(`Could not find a TFile for '${alt}'`);
 		}
 
 		// Read the actual pixel dimensions of the image from the vault
 		const { width } = await this.readImageDimensions(imgFile);
-		this.debugLog('PixelPerfectImage: Actual image width:', width);
 
 		// Compute the new width to insert into the link
 		const newWidth = Math.round((width * percentage) / 100);
@@ -185,8 +148,6 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 	/**
 	 * Extract a filename from the "src" if the alt is missing.
-	 * @param src The src attribute of the image
-	 * @returns The extracted filename or null if not found
 	 */
 	private parseFileNameFromSrc(src: string): string | null {
 		const [pathWithoutQuery] = src.split("?");
@@ -200,30 +161,21 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 	/**
 	 * Load the binary data of the image from vault and measure its real width/height.
-	 * @param file The TFile representing the image
-	 * @returns Promise resolving to the image dimensions
-	 * @throws Error if the image cannot be loaded or measured
 	 */
 	private async readImageDimensions(file: TFile): Promise<{ width: number; height: number }> {
-		this.debugLog('PixelPerfectImage: Reading image dimensions for file:', file.path);
 		const data = await this.app.vault.readBinary(file);
-		this.debugLog('PixelPerfectImage: Binary read, size:', data.byteLength);
 
 		return new Promise((resolve, reject) => {
 			const blob = new Blob([new Uint8Array(data)], { type: "image/*" });
 			const url = URL.createObjectURL(blob);
 
-			this.debugLog('PixelPerfectImage: Created blob URL:', url);
-
 			const tempImg = new Image();
 			tempImg.onload = () => {
-				URL.revokeObjectURL(url); // Clean up the blob URL
-				this.debugLog('PixelPerfectImage: Finished loading image:', { width: tempImg.width, height: tempImg.height });
+				URL.revokeObjectURL(url);
 				resolve({ width: tempImg.width, height: tempImg.height });
 			};
 			tempImg.onerror = (err) => {
-				URL.revokeObjectURL(url); // Clean up the blob URL
-				this.debugLog('error', 'PixelPerfectImage: Error loading image blob:', err);
+				URL.revokeObjectURL(url);
 				reject(new Error('Failed to load image'));
 			};
 			tempImg.src = url;
@@ -232,13 +184,8 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 	/**
 	 * Updates the width parameter in wiki image links that reference the given image.
-	 * @param imageFile The TFile representing the image to update links for
-	 * @param newWidth The new width to set in the links
-	 * @throws Error if the active file cannot be found or updated
 	 */
 	private async updateImageLinkWidth(imageFile: TFile, newWidth: number) {
-		this.debugLog('PixelPerfectImage: Updating links for', { path: imageFile.path, newWidth });
-
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			throw new Error('No active file, cannot update link.');
@@ -246,7 +193,6 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 		// If the current file is the same as the image file, there's no wiki link to update
 		if (activeFile.path === imageFile.path) {
-			this.debugLog('PixelPerfectImage: The active file is the image itself, skipping.');
 			return;
 		}
 
@@ -257,8 +203,6 @@ export default class PixelPerfectImagePlugin extends Plugin {
 
 		const editor = markdownView.editor;
 		const docText = editor.getValue();
-		this.debugLog('PixelPerfectImage: Document text length:', docText.length);
-
 		let didChange = false;
 
 		const replacedText = docText.replace(IMAGE_WIKILINK_REGEX, (_, opening, linkInner, closing) => {
@@ -287,10 +231,8 @@ export default class PixelPerfectImagePlugin extends Plugin {
 		});
 
 		if (didChange && replacedText !== docText) {
-			this.debugLog('PixelPerfectImage: Link text changed. Updating editor...');
 			editor.setValue(replacedText);
-		} else {
-			this.debugLog('PixelPerfectImage: No applicable links changed.');
+			this.debugLog(`Updated image size to ${newWidth}px in ${activeFile.path}`);
 		}
 	}
 
