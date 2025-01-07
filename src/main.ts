@@ -31,14 +31,25 @@ export default class PixelPerfectImage extends Plugin {
 				return;
 			}
 
-			// Prevent default context menus to show our custom one
+			// Check the configured modifier key
+			const modKey = this.settings.modifierKey;
+			const isModifierPressed = modKey === 'meta' 
+				? (this.isMacPlatform() ? ev.metaKey : ev.ctrlKey)
+				: ev[`${modKey}Key`];
+
+			// Only show our custom menu if the modifier key is pressed
+			if (!isModifierPressed) {
+				return;
+			}
+
+			// Prevent default context menu to show our custom one
 			ev.preventDefault();
 
 			const menu = new Menu();
-				await this.addDimensionsMenuItem(menu, target);
-				this.addResizeMenuItems(menu, ev);
+			await this.addDimensionsMenuItem(menu, target);
+			this.addResizeMenuItems(menu, ev);
 
-				menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
+			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
 		});
 	}
 
@@ -382,5 +393,12 @@ export default class PixelPerfectImage extends Plugin {
 
 		this.debugLog("Could not find file from either src or wiki link");
 		return null;
+	}
+
+	private isMacPlatform(): boolean {
+		if ('userAgentData' in navigator) {
+			return (navigator as any).userAgentData.platform === 'macOS';
+		}
+		return navigator.platform.toLowerCase().includes('mac');
 	}
 }
