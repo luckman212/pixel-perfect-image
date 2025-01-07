@@ -49,6 +49,9 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param img - The HTML image element that was right-clicked
 	 */
 	private async addDimensionsMenuItem(menu: Menu, img: HTMLImageElement): Promise<void> {
+		// Only add file info if the setting is enabled
+		if (!this.settings.showFileInfo) return;
+
 		try {
 			const activeFile = this.app.workspace.getActiveFile();
 			if (!activeFile) return;
@@ -60,9 +63,26 @@ export default class PixelPerfectImage extends Plugin {
 			}
 
 			const { width, height } = await this.readImageDimensions(imgFile);
+			
+			// Get file size in KB or MB
+			const stat = await this.app.vault.adapter.stat(imgFile.path);
+			const fileSize = stat?.size ?? 0;
+			const formattedSize = fileSize > 1024 * 1024 
+				? `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
+				: `${Math.round(fileSize / 1024)} KB`;
+
+			// Add filename menu item
 			menu.addItem((item) => {
 				item
-					.setTitle(`Dimensions: ${width} × ${height} px`)
+					.setTitle(imgFile.name)
+					.setIcon("image-file")
+					.setDisabled(true);
+			});
+
+			// Add dimensions and size menu item
+			menu.addItem((item) => {
+				item
+					.setTitle(`${width} × ${height} px, ${formattedSize}`)
 					.setIcon("info")
 					.setDisabled(true);
 			});

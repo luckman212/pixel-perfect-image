@@ -3,10 +3,12 @@ import PixelPerfectImage from './main';
 
 export interface PixelPerfectImageSettings {
 	debugMode: boolean;
+	showFileInfo: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
-	debugMode: false
+	debugMode: false,
+	showFileInfo: true
 };
 
 export class PixelPerfectImageSettingTab extends PluginSettingTab {
@@ -21,6 +23,18 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 
 		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName("Show File Information")
+			.setDesc("Show file name, dimensions and size in the context menu.")
+			.addToggle(toggle => {
+				toggle
+					.setValue(this.plugin.settings.showFileInfo)
+					.onChange(async (value: boolean) => {
+						this.plugin.settings.showFileInfo = value;
+						await this.plugin.saveSettings();
+					});
+			});
 
 		new Setting(containerEl)
 			.setName("Debug Mode")
