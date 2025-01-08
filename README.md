@@ -1,6 +1,6 @@
 # Pixel Perfect Image for Obsidian
 
-A plugin for [Obsidian](https://obsidian.md) that helps you resize images to their exact pixel dimensions. Right-click any image in your notes to view its actual dimensions and quickly resize it to common percentages.
+A plugin for [Obsidian](https://obsidian.md) that enhances your image management experience. Right-click any image in your notes to access a powerful context menu that lets you view image details, resize with pixel-perfect accuracy, and perform various file operations. Whether you're writing documentation, creating study notes, or managing a digital garden, this plugin helps you maintain precise control over your images while streamlining your workflow with quick access to external editors and file operations.
 
 ## Features
 
