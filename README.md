@@ -14,7 +14,7 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Screenshot
 
-![screenshot](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot1.png?raw=true)
+![Screenshot](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot1.png?raw=true)
 
 ## How to Use
 
@@ -51,11 +51,7 @@ After resizing to 50%:
 
 ## Settings
 
-- **Show File Information**: Show/hide filename and dimensions in context menu
-- **External Editor**:
-  - Enable/disable external editor option
-  - Set editor name and path
-- **Debug Mode**: Log details to console for troubleshooting
+![Settings](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot2.png?raw=true)
 
 ## Support
 
