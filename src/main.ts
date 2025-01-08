@@ -77,7 +77,7 @@ export default class PixelPerfectImage extends Plugin {
 
 			const imgFile = this.getFileForImage(img, activeFile);
 			if (!imgFile) {
-				this.debugLog('Could not find file for alt/src');
+				this.debugLog('Could not resolve image file');
 				return;
 			}
 
@@ -406,17 +406,13 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private getFileForImage(img: HTMLImageElement, activeFile: TFile): TFile | null {
 		const src = img.getAttribute('src') ?? "";
-		let wikiLink = img.getAttribute('alt'); // e.g. "MyImage.png|200"
+		let wikiLink = img.getAttribute('alt'); // e.g., "MyImage.png|200"
 
-		// Log out what we got:
-		this.debugLog(`getFileForImage → src: [${src}], alt: [${wikiLink}]`);
-
-		// For Markdown-style images, try to parse the src:
+		// For Markdown-style images, try to parse the src attribute:
 		const srcFileName = this.parseFileNameFromSrc(src);
 		if (srcFileName) {
 			const fileFromSrc = this.app.metadataCache.getFirstLinkpathDest(srcFileName, activeFile.path);
 			if (fileFromSrc) {
-				this.debugLog(`Found file from srcFileName: ${srcFileName} → ${fileFromSrc.path}`);
 				return fileFromSrc;
 			}
 		}
@@ -426,12 +422,9 @@ export default class PixelPerfectImage extends Plugin {
 			wikiLink = wikiLink.split("|")[0].trim();
 			const fileFromLink = this.app.metadataCache.getFirstLinkpathDest(wikiLink, activeFile.path);
 			if (fileFromLink) {
-				this.debugLog(`Found file from link: ${wikiLink} → ${fileFromLink.path}`);
 				return fileFromLink;
 			}
 		}
-
-		this.debugLog("Could not find file from either src or wiki link");
 		return null;
 	}
 
@@ -454,8 +447,6 @@ export default class PixelPerfectImage extends Plugin {
 
 		// Decode "%20" and other URL entities back into normal characters
 		fileName = decodeURIComponent(fileName);
-
-		this.debugLog(`parseFileNameFromSrc → decoded fileName: [${fileName}]`);
 
 		return fileName;
 	}
