@@ -1,4 +1,4 @@
-import { Menu, MarkdownView, Notice, Plugin, TFile, App, normalizePath } from 'obsidian';
+import { Menu, MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
@@ -71,6 +71,20 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
+	 * Helper to create a disabled menu item for displaying information
+	 * @param menu - The menu to add the item to
+	 * @param title - The title of the menu item
+	 * @param icon - The icon to use
+	 */
+	private addInfoMenuItem(menu: Menu, title: string, icon: string): void {
+		menu.addItem((item) => {
+			item.setTitle(title)
+				.setIcon(icon)
+				.setDisabled(true);
+		});
+	}
+
+	/**
 	 * Adds an informational menu item showing the actual dimensions of the image.
 	 * Reads dimensions from the image file in the vault.
 	 * @param menu - The context menu to add the item to
@@ -91,20 +105,10 @@ export default class PixelPerfectImage extends Plugin {
 			const scaleText = currentScale !== null ? ` @ ${currentScale}%` : '';
 
 			// Add filename menu item with scale
-			menu.addItem((item) => {
-				item
-					.setTitle(`${result.imgFile.name}${scaleText}`)
-					.setIcon("image-file")
-					.setDisabled(true);
-			});
+			this.addInfoMenuItem(menu, `${result.imgFile.name}${scaleText}`, "image-file");
 
 			// Add dimensions menu item
-			menu.addItem((item) => {
-				item
-					.setTitle(`${width} × ${height} px`)
-					.setIcon("info")
-					.setDisabled(true);
-			});
+			this.addInfoMenuItem(menu, `${width} × ${height} px`, "info");
 		} catch (error) {
 			this.errorLog('Could not read dimensions:', error);
 			new Notice("Could not read image dimensions");
@@ -328,8 +332,9 @@ export default class PixelPerfectImage extends Plugin {
 	 * Adds file operation menu items like Show in Finder/Explorer and Open in Default App
 	 */
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
-		// Add show in system explorer option
 		const isMac = isMacPlatform();
+
+		// Add show in system explorer option
 		this.addMenuItem(
 			menu,
 			isMac ? 'Show in Finder' : 'Show in Explorer',
@@ -337,7 +342,7 @@ export default class PixelPerfectImage extends Plugin {
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
 				if (!result) return;
-				this.app.showInFolder(result.imgFile.path);
+				await this.showInSystemExplorer(result.imgFile);
 			},
 			'Failed to open system explorer'
 		);
@@ -350,7 +355,7 @@ export default class PixelPerfectImage extends Plugin {
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
 				if (!result) return;
-				this.app.openWithDefaultApp(result.imgFile.path);
+				await this.openInDefaultApp(result.imgFile);
 			},
 			'Failed to open in default app'
 		);
@@ -365,13 +370,12 @@ export default class PixelPerfectImage extends Plugin {
 				async () => {
 					const result = await this.getImageFileWithErrorHandling(target);
 					if (!result) return;
-					this.openInExternalEditor(result.imgFile.path);
+					await this.openInExternalEditor(result.imgFile.path);
 				},
 				`Failed to open image in ${editorName}`
 			);
 		}
 	}
-
 	// Image Operations
 	// ----------------
 
@@ -393,53 +397,63 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
+	 * Helper to load an image and get its dimensions
+	 * @param src - The image source URL
+	 * @param crossOrigin - Whether to set crossOrigin attribute
+	 * @returns Promise resolving to the loaded image
+	 */
+	private loadImage(src: string, crossOrigin?: 'anonymous'): Promise<HTMLImageElement> {
+		return new Promise((resolve, reject) => {
+			const img = new Image();
+			if (crossOrigin) {
+				img.crossOrigin = crossOrigin;
+			}
+			img.onload = () => resolve(img);
+			img.onerror = () => reject(new Error('Failed to load image'));
+			img.src = src;
+		});
+	}
+
+	/**
+	 * Helper to create a blob from binary data
+	 * @param data - The binary data
+	 * @param type - The MIME type of the data
+	 * @returns The created blob
+	 */
+	private createBlob(data: ArrayBuffer, type: string): Blob {
+		return new Blob([new Uint8Array(data)], { type });
+	}
+
+	/**
 	 * Copies an image to the system clipboard
 	 * @param targetImg - The HTML image element to copy
 	 */
 	private async copyImageToClipboard(targetImg: HTMLImageElement): Promise<void> {
-		const img = new Image();
-		img.crossOrigin = 'anonymous';
+		try {
+			const img = await this.loadImage(targetImg.src, 'anonymous');
+			const canvas = document.createElement('canvas');
+			canvas.width = img.naturalWidth;
+			canvas.height = img.naturalHeight;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) {
+				throw new Error('Failed to get canvas context');
+			}
 
-		return new Promise((resolve, reject) => {
-			img.onload = () => {
-				const canvas = document.createElement('canvas');
-				canvas.width = img.naturalWidth;
-				canvas.height = img.naturalHeight;
-				const ctx = canvas.getContext('2d');
-				if (!ctx) {
-					const error = new Error('Failed to get canvas context');
-					this.errorLog('Copy to clipboard failed:', error);
-					reject(error);
-					return;
-				}
+			ctx.drawImage(img, 0, 0);
+			const blob = await new Promise<Blob | null>((resolveBlob) => {
+				canvas.toBlob(resolveBlob);
+			});
 
-				ctx.drawImage(img, 0, 0);
-				canvas.toBlob(async (blob) => {
-					if (!blob) {
-						const error = new Error('Failed to create blob');
-						this.errorLog('Copy to clipboard failed:', error);
-						reject(error);
-						return;
-					}
-					try {
-						const item = new ClipboardItem({ [blob.type]: blob });
-						await navigator.clipboard.write([item]);
-						resolve();
-					} catch (error) {
-						this.errorLog('Copy to clipboard failed:', error);
-						reject(error);
-					}
-				});
-			};
+			if (!blob) {
+				throw new Error('Failed to create blob');
+			}
 
-			img.onerror = () => {
-				const error = new Error('Failed to load image');
-				this.errorLog('Copy to clipboard failed:', error);
-				reject(error);
-			};
-
-			img.src = targetImg.src;
-		});
+			const item = new ClipboardItem({ [blob.type]: blob });
+			await navigator.clipboard.write([item]);
+		} catch (error) {
+			this.errorLog('Copy to clipboard failed:', error);
+			throw error;
+		}
 	}
 
 	/**
@@ -464,11 +478,54 @@ export default class PixelPerfectImage extends Plugin {
 
 		const editor = markdownView.editor;
 		const docText = editor.getValue();
-
 		let didChange = false;
 		
-		// First handle wiki-style links
-		let replacedText = docText.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
+		// Handle both link types
+		let replacedText = this.updateWikiLinks(docText, activeFile, imageFile, transform);
+		replacedText = this.updateMarkdownLinks(replacedText, activeFile, imageFile, transform);
+
+		if (replacedText !== docText) {
+			try {
+				editor.setValue(replacedText);
+				didChange = true;
+			} catch (error) {
+				this.errorLog('Failed to update editor content:', error);
+				throw new Error('Failed to update image link');
+			}
+		}
+
+		return didChange;
+	}
+
+	/**
+	 * Helper to resolve a file path to a TFile in the vault
+	 * @param linkPath - The path to resolve
+	 * @param activeFile - The currently active file for path resolution
+	 * @param imageFile - Optional file to compare against for matching
+	 * @returns The resolved TFile, or null if not found or doesn't match imageFile
+	 */
+	private resolveLink(linkPath: string, activeFile: TFile, imageFile?: TFile): TFile | null {
+		const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
+		if (!resolvedFile) return null;
+		if (imageFile && resolvedFile.path !== imageFile.path) return null;
+		return resolvedFile;
+	}
+
+	/**
+	 * Updates wiki-style image links in the text
+	 * @param text - The text to update
+	 * @param activeFile - The currently active file
+	 * @param imageFile - The image file to update links for
+	 * @param transform - Function to transform the parameters
+	 * @returns The updated text
+	 */
+	private updateWikiLinks(
+		text: string,
+		activeFile: TFile,
+		imageFile: TFile,
+		transform: (params: string[]) => string[]
+	): string {
+		return text.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
 			// Handle subpath components (e.g., #heading)
 			let [linkWithoutHash, hashPart] = linkInner.split("#", 2);
 			if (hashPart) hashPart = "#" + hashPart;
@@ -476,8 +533,7 @@ export default class PixelPerfectImage extends Plugin {
 			// Split link path and parameters
 			let [linkPath, ...pipeParams] = linkWithoutHash.split("|");
 
-			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
-			if (!resolvedFile || resolvedFile.path !== imageFile.path) {
+			if (!this.resolveLink(linkPath, activeFile, imageFile)) {
 				return _;
 			}
 
@@ -486,42 +542,42 @@ export default class PixelPerfectImage extends Plugin {
 			const newLink = newParams.length > 0 ? [linkPath, ...newParams].join("|") : linkPath;
 			const updatedInner = hashPart ? `${newLink}${hashPart}` : newLink;
 
-			didChange = true;
 			return `${opening}${updatedInner}${closing}`;
 		});
+	}
 
-		// Then handle Markdown-style links
-		replacedText = replacedText.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
+	/**
+	 * Updates markdown-style image links in the text
+	 * @param text - The text to update
+	 * @param activeFile - The currently active file
+	 * @param imageFile - The image file to update links for
+	 * @param transform - Function to transform the parameters
+	 * @returns The updated text
+	 */
+	private updateMarkdownLinks(
+		text: string,
+		activeFile: TFile,
+		imageFile: TFile,
+		transform: (params: string[]) => string[]
+	): string {
+		return text.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
 			// Split description and parameters
 			let [desc, ...pipeParams] = description.split("|");
 			
-			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
-			if (!resolvedFile || resolvedFile.path !== imageFile.path) {
+			if (!this.resolveLink(linkPath, activeFile, imageFile)) {
 				return match;
 			}
 
 			// If there's no description, use the filename without extension
 			if (!desc) {
-				desc = resolvedFile.basename;
+				desc = imageFile.basename;
 			}
 
 			// Transform parameters using the provided function
 			const newParams = transform(pipeParams);
 			const newDescription = newParams.length > 0 ? [desc, ...newParams].join("|") : desc;
-			didChange = true;
 			return `![${newDescription}](${linkPath})`;
 		});
-
-		if (didChange && replacedText !== docText) {
-			try {
-				editor.setValue(replacedText);
-			} catch (error) {
-				this.errorLog('Failed to update editor content:', error);
-				throw new Error('Failed to update image link');
-			}
-		}
-
-		return didChange;
 	}
 
 	/**
@@ -560,24 +616,17 @@ export default class PixelPerfectImage extends Plugin {
 
 		try {
 			const data = await this.app.vault.readBinary(file);
-			return new Promise((resolve, reject) => {
-				const blob = new Blob([new Uint8Array(data)], { type: "image/*" });
-				const url = URL.createObjectURL(blob);
+			const blob = this.createBlob(data, "image/*");
+			const url = URL.createObjectURL(blob);
 
-				const tempImg = new Image();
-				tempImg.onload = () => {
-					URL.revokeObjectURL(url);
-					const dimensions = { width: tempImg.width, height: tempImg.height };
-					this.dimensionCache.set(file.path, dimensions);
-					resolve(dimensions);
-				};
-				tempImg.onerror = (err) => {
-					URL.revokeObjectURL(url);
-					this.errorLog('Failed to load image for dimensions:', err);
-					reject(new Error('Failed to load image'));
-				};
-				tempImg.src = url;
-			});
+			try {
+				const img = await this.loadImage(url);
+				const dimensions = { width: img.width, height: img.height };
+				this.dimensionCache.set(file.path, dimensions);
+				return dimensions;
+			} finally {
+				URL.revokeObjectURL(url);
+			}
 		} catch (error) {
 			this.errorLog('Failed to read image file:', error);
 			throw error;
@@ -600,7 +649,7 @@ export default class PixelPerfectImage extends Plugin {
 		// For Markdown-style images, try to parse the src attribute:
 		const srcFileName = this.parseFileNameFromSrc(src);
 		if (srcFileName) {
-			const fileFromSrc = this.app.metadataCache.getFirstLinkpathDest(srcFileName, activeFile.path);
+			const fileFromSrc = this.resolveLink(srcFileName, activeFile);
 			if (fileFromSrc) {
 				return fileFromSrc;
 			}
@@ -609,7 +658,7 @@ export default class PixelPerfectImage extends Plugin {
 		// For wiki-style images (Obsidian puts "MyImage.png|width" in alt)
 		if (wikiLink) {
 			wikiLink = wikiLink.split("|")[0].trim();
-			const fileFromLink = this.app.metadataCache.getFirstLinkpathDest(wikiLink, activeFile.path);
+			const fileFromLink = this.resolveLink(wikiLink, activeFile);
 			if (fileFromLink) {
 				return fileFromLink;
 			}
@@ -661,6 +710,20 @@ export default class PixelPerfectImage extends Plugin {
 	private errorLog(...args: any[]) {
 		const timestamp = new Date().toTimeString().split(' ')[0];
 		console.error(`${timestamp}`, ...args);
+	}
+
+	/**
+	 * Shows the file in system explorer (Finder on macOS)
+	 */
+	private async showInSystemExplorer(file: TFile): Promise<void> {
+		this.app.showInFolder(file.path);
+	}
+
+	/**
+	 * Opens the file in the default system app
+	 */
+	private async openInDefaultApp(file: TFile): Promise<void> {
+		this.app.openWithDefaultApp(file.path);
 	}
 
 	// --- Add a helper function to launch external editor
