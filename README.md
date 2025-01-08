@@ -4,8 +4,7 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Features
 
-- 🔍 View image dimensions and filename
-- 📐 Resize images to exact preset percentages (100%, 50%, 25%)
+- 📐 Resize images to pixel perfect percentages (100%, 50%, 25%)
 - 📋 Copy image to clipboard
 - 🔗 Copy file path to clipboard
 - 📂 Show in Finder/Explorer
