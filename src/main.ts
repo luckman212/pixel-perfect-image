@@ -1,10 +1,18 @@
-import { App, Editor, Menu, MarkdownView, Notice, Plugin, TFile } from 'obsidian';
+import { Menu, MarkdownView, Notice, Plugin, TFile, App, normalizePath } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
+import { join } from 'path';
+
+// Used for Reveal in Navigation
+declare module 'obsidian' {
+	interface App {
+		showInFolder(path: string): void;
+	}
+}
 
 /** Fixed percentages available for image resizing */
 const RESIZE_PERCENTAGES = [100, 50, 25] as const;
 /** Regular expression to match Obsidian image wikilinks: ![[image.png]] */
-const IMAGE_WIKILINK_REGEX = /(!\[\[)([^\]]+)(\]\])/g;
+const WIKILINK_IMAGE_REGEX = /(!\[\[)([^\]]+)(\]\])/g;
 /** Regular expressions to match both image link styles */
 const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
 
@@ -20,6 +28,17 @@ export default class PixelPerfectImage extends Plugin {
 		this.debugLog('Plugin loaded');
 	}
 
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
+	}
+
+	// Context Menu Handlers
+	// ----------------------
+
 	/**
 	 * Registers a context menu handler for images in the editor.
 	 * The menu provides options to view image dimensions and resize the image.
@@ -28,17 +47,6 @@ export default class PixelPerfectImage extends Plugin {
 		this.registerDomEvent(document, 'contextmenu', async (ev: MouseEvent) => {
 			const target = ev.target;
 			if (!(target instanceof HTMLImageElement)) {
-				return;
-			}
-
-			// Check the configured modifier key
-			const modKey = this.settings.modifierKey;
-			const isModifierPressed = modKey === 'meta' 
-				? (this.isMacPlatform() ? ev.metaKey : ev.ctrlKey)
-				: ev[`${modKey}Key`];
-
-			// Only show our custom menu if the modifier key is pressed
-			if (!isModifierPressed) {
 				return;
 			}
 
@@ -74,13 +82,6 @@ export default class PixelPerfectImage extends Plugin {
 			}
 
 			const { width, height } = await this.readImageDimensions(imgFile);
-			
-			// Get file size in KB or MB
-			const stat = await this.app.vault.adapter.stat(imgFile.path);
-			const fileSize = stat?.size ?? 0;
-			const formattedSize = fileSize > 1024 * 1024 
-				? `${(fileSize / (1024 * 1024)).toFixed(1)} MB`
-				: `${Math.round(fileSize / 1024)} KB`;
 
 			// Add filename menu item
 			menu.addItem((item) => {
@@ -90,10 +91,10 @@ export default class PixelPerfectImage extends Plugin {
 					.setDisabled(true);
 			});
 
-			// Add dimensions and size menu item
+			// Add dimensions menu item
 			menu.addItem((item) => {
 				item
-					.setTitle(`${width} × ${height} px, ${formattedSize}`)
+					.setTitle(`${width} × ${height} px`)
 					.setIcon("info")
 					.setDisabled(true);
 			});
@@ -112,7 +113,7 @@ export default class PixelPerfectImage extends Plugin {
 	private addResizeMenuItems(menu: Menu, ev: MouseEvent): void {
 		// Add copy to clipboard option first
 		menu.addItem((item) => {
-			item.setTitle('Copy image')
+			item.setTitle('Copy Image')
 				.setIcon('copy')
 				.onClick(async () => {
 					try {
@@ -121,6 +122,57 @@ export default class PixelPerfectImage extends Plugin {
 					} catch (error) {
 						this.errorLog('Failed to copy image:', error);
 						new Notice('Failed to copy image to clipboard');
+					}
+				});
+		});
+
+		// Add copy local path option
+		menu.addItem((item) => {
+			item.setTitle('Copy Local Path')
+				.setIcon('link')
+				.onClick(async () => {
+					try {
+						const activeFile = this.app.workspace.getActiveFile();
+						if (!activeFile) return;
+						
+						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
+						if (!imgFile) {
+							new Notice('Could not locate image file');
+							return;
+						}
+						
+						// @ts-ignore - Using Electron's __dirname global
+						const vaultPath = (this.app.vault.adapter as any).basePath;
+						const fullPath = join(vaultPath, normalizePath(imgFile.path));
+						await navigator.clipboard.writeText(fullPath);
+						new Notice('File path copied to clipboard');
+					} catch (error) {
+						this.errorLog('Failed to copy file path:', error);
+						new Notice('Failed to copy file path');
+					}
+				});
+		});
+
+		// Add show in system explorer option
+		menu.addItem((item) => {
+			const isMac = this.isMacPlatform();
+			item.setTitle(isMac ? 'Show in Finder' : 'Show in Explorer')
+				.setIcon('folder-open')
+				.onClick(async () => {
+					try {
+						const activeFile = this.app.workspace.getActiveFile();
+						if (!activeFile) return;
+						
+						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
+						if (!imgFile) {
+							new Notice('Could not locate image file');
+							return;
+						}
+						
+						this.app.showInFolder(imgFile.path);
+					} catch (error) {
+						this.errorLog('Failed to show in system explorer:', error);
+						new Notice('Failed to open system explorer');
 					}
 				});
 		});
@@ -145,63 +197,8 @@ export default class PixelPerfectImage extends Plugin {
 		});
 	}
 
-	/**
-	 * Copies an image to the system clipboard
-	 * @param targetImg - The HTML image element to copy
-	 */
-	private async copyImageToClipboard(targetImg: HTMLImageElement): Promise<void> {
-		const img = new Image();
-		img.crossOrigin = 'anonymous';
-
-		return new Promise((resolve, reject) => {
-			img.onload = async () => {
-				try {
-					const canvas = document.createElement('canvas');
-					canvas.width = img.naturalWidth;
-					canvas.height = img.naturalHeight;
-					const ctx = canvas.getContext('2d');
-					if (!ctx) {
-						throw new Error('Failed to get canvas context');
-					}
-
-					ctx.drawImage(img, 0, 0);
-					const dataURL = canvas.toDataURL();
-					const response = await fetch(dataURL);
-					const blob = await response.blob();
-					const item = new ClipboardItem({ [blob.type]: blob });
-					await navigator.clipboard.write([item]);
-					resolve();
-				} catch (error) {
-					reject(error);
-				}
-			};
-
-			img.onerror = () => reject(new Error('Failed to load image'));
-			img.src = targetImg.src;
-		});
-	}
-
-	/**
-	 * Logs debug messages when debug mode is enabled in settings.
-	 * Includes timestamp for better debugging.
-	 * @param args - Arguments to log
-	 */
-	private debugLog(...args: any[]) {
-		if (this.settings.debugMode) {
-			const timestamp = new Date().toTimeString().split(' ')[0];
-			console.log(`${timestamp}`, ...args);
-		}
-	}
-
-	/**
-	 * Logs error messages with timestamp.
-	 * Always logs regardless of debug mode.
-	 * @param args - Arguments to log
-	 */
-	private errorLog(...args: any[]) {
-		const timestamp = new Date().toTimeString().split(' ')[0];
-		console.error(`${timestamp}`, ...args);
-	}
+	// Image Operations
+	// ----------------
 
 	/**
 	 * Resizes an image in the editor by updating its wikilink width parameter.
@@ -229,50 +226,52 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
-	 * Extracts a filename from an image's src attribute.
-	 * Used as fallback when alt text is not available.
-	 * @param src - The src attribute value
-	 * @returns The extracted filename or null if not found
+	 * Copies an image to the system clipboard
+	 * @param targetImg - The HTML image element to copy
 	 */
-	private parseFileNameFromSrc(src: string): string | null {
-		const [pathWithoutQuery] = src.split("?");
-		const slashIdx = pathWithoutQuery.lastIndexOf("/");
-		if (slashIdx < 0 || slashIdx === pathWithoutQuery.length - 1) {
-			return null;
-		}
-		const fileName = pathWithoutQuery.substring(slashIdx + 1);
-		return fileName || null;
-	}
-
-	/**
-	 * Reads an image file from the vault and determines its dimensions.
-	 * Uses a cache to avoid repeated file reads.
-	 * @param file - The image file to read
-	 * @returns Object containing width and height in pixels
-	 */
-	private async readImageDimensions(file: TFile): Promise<{ width: number; height: number }> {
-		if (this.dimensionCache.has(file.path)) {
-			return this.dimensionCache.get(file.path)!;
-		}
-
-		const data = await this.app.vault.readBinary(file);
+	private async copyImageToClipboard(targetImg: HTMLImageElement): Promise<void> {
+		const img = new Image();
+		img.crossOrigin = 'anonymous';
 
 		return new Promise((resolve, reject) => {
-			const blob = new Blob([new Uint8Array(data)], { type: "image/*" });
-			const url = URL.createObjectURL(blob);
+			img.onload = () => {
+				const canvas = document.createElement('canvas');
+				canvas.width = img.naturalWidth;
+				canvas.height = img.naturalHeight;
+				const ctx = canvas.getContext('2d');
+				if (!ctx) {
+					const error = new Error('Failed to get canvas context');
+					this.errorLog('Copy to clipboard failed:', error);
+					reject(error);
+					return;
+				}
 
-			const tempImg = new Image();
-			tempImg.onload = () => {
-				URL.revokeObjectURL(url);
-				const dimensions = { width: tempImg.width, height: tempImg.height };
-				this.dimensionCache.set(file.path, dimensions);
-				resolve(dimensions);
+				ctx.drawImage(img, 0, 0);
+				canvas.toBlob(async (blob) => {
+					if (!blob) {
+						const error = new Error('Failed to create blob');
+						this.errorLog('Copy to clipboard failed:', error);
+						reject(error);
+						return;
+					}
+					try {
+						const item = new ClipboardItem({ [blob.type]: blob });
+						await navigator.clipboard.write([item]);
+						resolve();
+					} catch (error) {
+						this.errorLog('Copy to clipboard failed:', error);
+						reject(error);
+					}
+				});
 			};
-			tempImg.onerror = (err) => {
-				URL.revokeObjectURL(url);
-				reject(new Error('Failed to load image'));
+
+			img.onerror = () => {
+				const error = new Error('Failed to load image');
+				this.errorLog('Copy to clipboard failed:', error);
+				reject(error);
 			};
-			tempImg.src = url;
+
+			img.src = targetImg.src;
 		});
 	}
 
@@ -303,7 +302,7 @@ export default class PixelPerfectImage extends Plugin {
 		let didChange = false;
 		
 		// First handle wiki-style links
-		let replacedText = docText.replace(IMAGE_WIKILINK_REGEX, (_, opening, linkInner, closing) => {
+		let replacedText = docText.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
 			// Handle subpath components (e.g., #heading)
 			let [linkWithoutHash, hashPart] = linkInner.split("#", 2);
 			if (hashPart) hashPart = "#" + hashPart;
@@ -349,24 +348,55 @@ export default class PixelPerfectImage extends Plugin {
 		});
 
 		if (didChange && replacedText !== docText) {
-			editor.setValue(replacedText);
-			this.debugLog(`Updated image size to ${newWidth}px in ${activeFile.path}`);
+			try {
+				editor.setValue(replacedText);
+				this.debugLog(`Updated image size to ${newWidth}px in ${activeFile.path}`);
+			} catch (error) {
+				this.errorLog('Failed to update editor content:', error);
+				throw new Error('Failed to update image width in editor');
+			}
 		}
 	}
 
 	/**
-	 * Load plugin settings
+	 * Reads an image file from the vault and determines its dimensions.
+	 * Uses a cache to avoid repeated file reads.
+	 * @param file - The image file to read
+	 * @returns Object containing width and height in pixels
 	 */
-	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	private async readImageDimensions(file: TFile): Promise<{ width: number; height: number }> {
+		if (this.dimensionCache.has(file.path)) {
+			return this.dimensionCache.get(file.path)!;
+		}
+
+		try {
+			const data = await this.app.vault.readBinary(file);
+			return new Promise((resolve, reject) => {
+				const blob = new Blob([new Uint8Array(data)], { type: "image/*" });
+				const url = URL.createObjectURL(blob);
+
+				const tempImg = new Image();
+				tempImg.onload = () => {
+					URL.revokeObjectURL(url);
+					const dimensions = { width: tempImg.width, height: tempImg.height };
+					this.dimensionCache.set(file.path, dimensions);
+					resolve(dimensions);
+				};
+				tempImg.onerror = (err) => {
+					URL.revokeObjectURL(url);
+					this.errorLog('Failed to load image for dimensions:', err);
+					reject(new Error('Failed to load image'));
+				};
+				tempImg.src = url;
+			});
+		} catch (error) {
+			this.errorLog('Failed to read image file:', error);
+			throw error;
+		}
 	}
 
-	/**
-	 * Save plugin settings
-	 */
-	async saveSettings() {
-		await this.saveData(this.settings);
-	}
+	// File & Path Utilities
+	// ---------------------
 
 	/**
 	 * Resolves an HTML image element to its corresponding vault file.
@@ -376,29 +406,89 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private getFileForImage(img: HTMLImageElement, activeFile: TFile): TFile | null {
 		const src = img.getAttribute('src') ?? "";
-		const wikiLink = img.getAttribute('alt'); // 'alt' attribute contains the wiki-style link
+		let wikiLink = img.getAttribute('alt'); // e.g. "MyImage.png|200"
 
-		// For Markdown-style links, use the src since it contains the actual path
+		// Log out what we got:
+		this.debugLog(`getFileForImage → src: [${src}], alt: [${wikiLink}]`);
+
+		// For Markdown-style images, try to parse the src:
 		const srcFileName = this.parseFileNameFromSrc(src);
 		if (srcFileName) {
 			const fileFromSrc = this.app.metadataCache.getFirstLinkpathDest(srcFileName, activeFile.path);
-			if (fileFromSrc) return fileFromSrc;
+			if (fileFromSrc) {
+				this.debugLog(`Found file from srcFileName: ${srcFileName} → ${fileFromSrc.path}`);
+				return fileFromSrc;
+			}
 		}
 
-		// For wiki-style links, use the link text
+		// For wiki-style images (Obsidian puts "MyImage.png|width" in alt)
 		if (wikiLink) {
+			wikiLink = wikiLink.split("|")[0].trim();
 			const fileFromLink = this.app.metadataCache.getFirstLinkpathDest(wikiLink, activeFile.path);
-			if (fileFromLink) return fileFromLink;
+			if (fileFromLink) {
+				this.debugLog(`Found file from link: ${wikiLink} → ${fileFromLink.path}`);
+				return fileFromLink;
+			}
 		}
 
 		this.debugLog("Could not find file from either src or wiki link");
 		return null;
 	}
 
+	/**
+	 * Extracts a filename from an image's src attribute.
+	 * Used as fallback when alt text is not available.
+	 * @param src - The src attribute value
+	 * @returns The extracted filename or null if not found
+	 */
+	private parseFileNameFromSrc(src: string): string | null {
+		// Split off any query params (?xyz=...)
+		const [pathWithoutQuery] = src.split("?");
+		const slashIdx = pathWithoutQuery.lastIndexOf("/");
+		if (slashIdx < 0 || slashIdx >= pathWithoutQuery.length - 1) {
+			return null;
+		}
+
+		// Extract just the trailing filename portion
+		let fileName = pathWithoutQuery.substring(slashIdx + 1);
+
+		// Decode "%20" and other URL entities back into normal characters
+		fileName = decodeURIComponent(fileName);
+
+		this.debugLog(`parseFileNameFromSrc → decoded fileName: [${fileName}]`);
+
+		return fileName;
+	}
+
+	// Platform & Debug Utilities
+	// --------------------------
+
 	private isMacPlatform(): boolean {
 		if ('userAgentData' in navigator) {
 			return (navigator as any).userAgentData.platform === 'macOS';
 		}
 		return navigator.platform.toLowerCase().includes('mac');
+	}
+
+	/**
+	 * Logs debug messages when debug mode is enabled in settings.
+	 * Includes timestamp for better debugging.
+	 * @param args - Arguments to log
+	 */
+	private debugLog(...args: any[]) {
+		if (this.settings.debugMode) {
+			const timestamp = new Date().toTimeString().split(' ')[0];
+			console.log(`${timestamp}`, ...args);
+		}
+	}
+
+	/**
+	 * Logs error messages with timestamp.
+	 * Always logs regardless of debug mode.
+	 * @param args - Arguments to log
+	 */
+	private errorLog(...args: any[]) {
+		const timestamp = new Date().toTimeString().split(' ')[0];
+		console.error(`${timestamp}`, ...args);
 	}
 }
