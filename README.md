@@ -5,15 +5,12 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 ## Features
 
 - 🔍 View image dimensions and filename
-- 📐 Resize images to preset percentages (100%, 50%, 25%)
-- 🎯 Calculate dimensions from original image size
+- 📐 Resize images to exact preset percentages (100%, 50%, 25%)
 - 📋 Copy image to clipboard
-- 🔗 Copy file path
+- 🔗 Copy file path to clipboard
 - 📂 Show in Finder/Explorer
 - 🖼️ Open in default system viewer
-- 🎨 Open in external editor
-- 💨 Cache image dimensions for better performance
-- 🖼️ Support all image formats that Obsidian supports
+- 🎨 Open in external editor like Photoshop, Affinity Photo, etc.
 - 🔄 Work with both wikilinks and standard Markdown images
 
 ## Screenshot
@@ -61,18 +58,8 @@ After resizing to 50%:
   - Set editor name and path
 - **Debug Mode**: Log details to console for troubleshooting
 
-## Technical Details
-
-- Non-destructive resizing: only modifies width parameter in Markdown links
-- Caches image dimensions to reduce file reads
-- Compatible with wikilinks (![[image.png]]) and standard Markdown images (![](image.png))
-- Handles subpaths and multiple parameters in image links
-- Works on macOS and Windows
-
 ## Support
 
-For issues or feature requests, please use the [GitHub repository](https://github.com/yourusername/obsidian-pixel-perfect-image/issues).
+If you have any questions, suggestions, or issues, please open an issue on the [GitHub repository](https://github.com/johansan/pixel-perfect-image).
 
-## License
-
-MIT
+Enjoy using Pixel Perfect Image!
