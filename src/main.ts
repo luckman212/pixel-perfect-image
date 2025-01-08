@@ -92,10 +92,14 @@ export default class PixelPerfectImage extends Plugin {
 
 			const { width, height } = await this.readImageDimensions(imgFile);
 
-			// Add filename menu item
+			// Get current custom width if set
+			const customWidth = this.getCurrentImageWidth(img, activeFile, imgFile);
+			const scaleText = customWidth ? ` @ ${Math.round((customWidth / width) * 100)}%` : '';
+
+			// Add filename menu item with scale
 			menu.addItem((item) => {
 				item
-					.setTitle(imgFile.name)
+					.setTitle(`${imgFile.name}${scaleText}`)
 					.setIcon("image-file")
 					.setDisabled(true);
 			});
@@ -111,6 +115,58 @@ export default class PixelPerfectImage extends Plugin {
 			this.errorLog('Could not read dimensions:', error);
 			new Notice("Could not read image dimensions");
 		}
+	}
+
+	/**
+	 * Gets the current custom width of an image if set in the link
+	 * @param img - The HTML image element
+	 * @param activeFile - The currently active file
+	 * @param imageFile - The image file
+	 * @returns The custom width if set, otherwise null
+	 */
+	private getCurrentImageWidth(img: HTMLImageElement, activeFile: TFile, imageFile: TFile): number | null {
+		const editor = this.app.workspace.getActiveViewOfType(MarkdownView)?.editor;
+		if (!editor) return null;
+
+		const docText = editor.getValue();
+		let customWidth: number | null = null;
+
+		// Check wiki-style links
+		docText.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
+			// Handle subpath components (e.g., #heading)
+			let [linkWithoutHash] = linkInner.split("#", 1);
+
+			// Split link path and parameters
+			let [linkPath, ...pipeParams] = linkWithoutHash.split("|");
+
+			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
+			if (resolvedFile?.path === imageFile.path && pipeParams.length > 0) {
+				const width = parseInt(pipeParams[0]);
+				if (!isNaN(width)) {
+					customWidth = width;
+				}
+			}
+			return _;
+		});
+
+		// If not found in wiki links, check Markdown-style links
+		if (customWidth === null) {
+			docText.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
+				// Split description and parameters
+				let [desc, ...pipeParams] = description.split("|");
+				
+				const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
+				if (resolvedFile?.path === imageFile.path && pipeParams.length > 0) {
+					const width = parseInt(pipeParams[0]);
+					if (!isNaN(width)) {
+						customWidth = width;
+					}
+				}
+				return match;
+			});
+		}
+
+		return customWidth;
 	}
 
 	/**
