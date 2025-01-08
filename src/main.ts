@@ -188,7 +188,7 @@ export default class PixelPerfectImage extends Plugin {
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
 		// Add show in system explorer option
 		menu.addItem((item) => {
-			const isMac = this.isMacPlatform();
+			const isMac = isMacPlatform();
 			item.setTitle(isMac ? 'Show in Finder' : 'Show in Explorer')
 				.setIcon('folder-open')
 				.onClick(async () => {
@@ -516,10 +516,6 @@ export default class PixelPerfectImage extends Plugin {
 	// Platform & Debug Utilities
 	// --------------------------
 
-	private isMacPlatform(): boolean {
-		return isMacPlatform();
-	}
-
 	/**
 	 * Logs debug messages when debug mode is enabled in settings.
 	 * Includes timestamp for better debugging.
@@ -558,7 +554,7 @@ export default class PixelPerfectImage extends Plugin {
 
 		// 3. Choose command depending on macOS vs Windows
 		let cmd: string;
-		if (this.isMacPlatform()) {
+		if (isMacPlatform()) {
 			// On macOS, use `open -a "/Applications/Editor.app" "/path/to/file.png"`
 			cmd = `open -a "${editorPath}" "${absoluteFilePath}"`;
 		} else {

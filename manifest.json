@@ -3,9 +3,9 @@
 	"name": "Pixel Perfect Image",
 	"version": "1.0.0",
 	"minAppVersion": "1.4.4",
-	"description": "Resize images to pixel perfect dimensions, including 100%, 50% and 25%.",
+	"description": "Pixel perfect 100% image resizing, copy image to clipboard, copy file path to clipboard, show image in Finder/Explorer, edit image in external editor, and much more.",
 	"author": "Johan Sanneblad",
 	"authorUrl": "https://github.com/johansan",
 	"fundingUrl": "https://buymeacoffee.com/johansan",
-	"isDesktopOnly": false
+	"isDesktopOnly": true
 }
