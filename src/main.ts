@@ -237,31 +237,27 @@ export default class PixelPerfectImage extends Plugin {
 			});
 		});
 
-		// Add option to remove custom size
-		menu.addItem((item) => {
-			item.setTitle('Remove Custom Size')
-				.setIcon('reset')
-				.onClick(async () => {
-					try {
-						const img = ev.target as HTMLImageElement;
-						const activeFile = this.app.workspace.getActiveFile();
-						if (!activeFile) {
-							throw new Error("No active file in workspace to update a link.");
-						}
-
-						const imgFile = this.getFileForImage(img, activeFile);
-						if (!imgFile) {
-							throw new Error("Could not find the image file");
-						}
-
-						await this.removeImageWidth(imgFile);
-						new Notice('Removed custom size from image');
-					} catch (error) {
-						this.errorLog('Failed to remove custom size:', error);
-						new Notice('Failed to remove custom size from image');
-					}
+		// Add option to remove custom size if one is set
+		const img = ev.target as HTMLImageElement;
+		const activeFile = this.app.workspace.getActiveFile();
+		if (activeFile) {
+			const imgFile = this.getFileForImage(img, activeFile);
+			if (imgFile && this.getCurrentImageWidth(img, activeFile, imgFile) !== null) {
+				menu.addItem((item) => {
+					item.setTitle('Remove Custom Size')
+						.setIcon('reset')
+						.onClick(async () => {
+							try {
+								await this.removeImageWidth(imgFile);
+								new Notice('Removed custom size from image');
+							} catch (error) {
+								this.errorLog('Failed to remove custom size:', error);
+								new Notice('Failed to remove custom size from image');
+							}
+						});
 				});
-		});
+			}
+		}
 	}
 
 	/**
