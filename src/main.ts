@@ -518,7 +518,6 @@ export default class PixelPerfectImage extends Plugin {
 
 	/**
 	 * Logs debug messages when debug mode is enabled in settings.
-	 * Includes timestamp for better debugging.
 	 * @param args - Arguments to log
 	 */
 	private debugLog(...args: any[]) {
@@ -530,7 +529,6 @@ export default class PixelPerfectImage extends Plugin {
 
 	/**
 	 * Logs error messages with timestamp.
-	 * Always logs regardless of debug mode.
 	 * @param args - Arguments to log
 	 */
 	private errorLog(...args: any[]) {
