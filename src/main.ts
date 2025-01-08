@@ -180,6 +180,32 @@ export default class PixelPerfectImage extends Plugin {
 					});
 			});
 		});
+
+		// Add option to remove custom size
+		menu.addItem((item) => {
+			item.setTitle('Remove Custom Size')
+				.setIcon('reset')
+				.onClick(async () => {
+					try {
+						const img = ev.target as HTMLImageElement;
+						const activeFile = this.app.workspace.getActiveFile();
+						if (!activeFile) {
+							throw new Error("No active file in workspace to update a link.");
+						}
+
+						const imgFile = this.getFileForImage(img, activeFile);
+						if (!imgFile) {
+							throw new Error("Could not find the image file");
+						}
+
+						await this.removeImageWidth(imgFile);
+						new Notice('Removed custom size from image');
+					} catch (error) {
+						this.errorLog('Failed to remove custom size:', error);
+						new Notice('Failed to remove custom size from image');
+					}
+				});
+		});
 	}
 
 	/**
@@ -338,12 +364,11 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
-	 * Updates the width parameter in wikilinks that reference a specific image.
-	 * Handles complex wikilinks including subpaths and multiple parameters.
+	 * Updates image links in the document using a transformation function.
 	 * @param imageFile - The image file being referenced
-	 * @param newWidth - The new width to set in pixels
+	 * @param transform - Function that transforms the parameters of the image link
 	 */
-	private async updateImageLinkWidth(imageFile: TFile, newWidth: number) {
+	private async updateImageLinks(imageFile: TFile, transform: (params: string[]) => string[]) {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			throw new Error('No active file, cannot update link.');
@@ -377,9 +402,9 @@ export default class PixelPerfectImage extends Plugin {
 				return _;
 			}
 
-			pipeParams[0] = String(newWidth);
-
-			const newLink = [linkPath, ...pipeParams].join("|");
+			// Transform parameters using the provided function
+			const newParams = transform(pipeParams);
+			const newLink = newParams.length > 0 ? [linkPath, ...newParams].join("|") : linkPath;
 			const updatedInner = hashPart ? `${newLink}${hashPart}` : newLink;
 
 			didChange = true;
@@ -388,7 +413,7 @@ export default class PixelPerfectImage extends Plugin {
 
 		// Then handle Markdown-style links
 		replacedText = replacedText.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
-			// Split description and width parameter
+			// Split description and parameters
 			let [desc, ...pipeParams] = description.split("|");
 			
 			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
@@ -401,10 +426,9 @@ export default class PixelPerfectImage extends Plugin {
 				desc = resolvedFile.basename;
 			}
 
-			// Update or add width parameter
-			pipeParams[0] = String(newWidth);
-
-			const newDescription = [desc, ...pipeParams].join("|");
+			// Transform parameters using the provided function
+			const newParams = transform(pipeParams);
+			const newDescription = newParams.length > 0 ? [desc, ...newParams].join("|") : desc;
 			didChange = true;
 			return `![${newDescription}](${linkPath})`;
 		});
@@ -412,11 +436,35 @@ export default class PixelPerfectImage extends Plugin {
 		if (didChange && replacedText !== docText) {
 			try {
 				editor.setValue(replacedText);
-				this.debugLog(`Updated image size to ${newWidth}px in ${activeFile.path}`);
 			} catch (error) {
 				this.errorLog('Failed to update editor content:', error);
-				throw new Error('Failed to update image width in editor');
+				throw new Error('Failed to update image link');
 			}
+		}
+
+		return didChange;
+	}
+
+	/**
+	 * Updates the width parameter in wikilinks that reference a specific image.
+	 * @param imageFile - The image file being referenced
+	 * @param newWidth - The new width to set in pixels
+	 */
+	private async updateImageLinkWidth(imageFile: TFile, newWidth: number) {
+		const didChange = await this.updateImageLinks(imageFile, (_) => [String(newWidth)]);
+		if (didChange) {
+			this.debugLog(`Updated image size to ${newWidth}px`);
+		}
+	}
+
+	/**
+	 * Removes the width parameter from image links.
+	 * @param imageFile - The image file being referenced
+	 */
+	private async removeImageWidth(imageFile: TFile) {
+		const didChange = await this.updateImageLinks(imageFile, (_) => []);
+		if (didChange) {
+			this.debugLog('Removed custom size from image');
 		}
 	}
 
