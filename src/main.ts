@@ -6,6 +6,7 @@ import { join } from 'path';
 declare module 'obsidian' {
 	interface App {
 		showInFolder(path: string): void;
+		openWithDefaultApp(path: string): void;
 	}
 }
 
@@ -153,6 +154,9 @@ export default class PixelPerfectImage extends Plugin {
 				});
 		});
 
+		// Add separator
+		menu.addSeparator();
+
 		// Add show in system explorer option
 		menu.addItem((item) => {
 			const isMac = this.isMacPlatform();
@@ -173,6 +177,29 @@ export default class PixelPerfectImage extends Plugin {
 					} catch (error) {
 						this.errorLog('Failed to show in system explorer:', error);
 						new Notice('Failed to open system explorer');
+					}
+				});
+		});
+
+		// Add open in default app option
+		menu.addItem((item) => {
+			item.setTitle('Open in Default App')
+				.setIcon('open-elsewhere')
+				.onClick(async () => {
+					try {
+						const activeFile = this.app.workspace.getActiveFile();
+						if (!activeFile) return;
+						
+						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
+						if (!imgFile) {
+							new Notice('Could not locate image file');
+							return;
+						}
+						
+						this.app.openWithDefaultApp(imgFile.path);
+					} catch (error) {
+						this.errorLog('Failed to open in default app:', error);
+						new Notice('Failed to open in default app');
 					}
 				});
 		});
