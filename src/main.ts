@@ -1,6 +1,8 @@
 import { Menu, MarkdownView, Notice, Plugin, TFile, App, normalizePath } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
+import { exec } from "child_process";
+import { isMacPlatform } from './utils/platform';
 
 // Used for "Show in Finder"
 declare module 'obsidian' {
@@ -57,6 +59,12 @@ export default class PixelPerfectImage extends Plugin {
 			const menu = new Menu();
 			await this.addDimensionsMenuItem(menu, target);
 			this.addResizeMenuItems(menu, ev);
+			
+			// Add separator before file operations
+			menu.addSeparator();
+			
+			// Add file operation items
+			this.addFileOperationMenuItems(menu, target);
 
 			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
 		});
@@ -154,9 +162,30 @@ export default class PixelPerfectImage extends Plugin {
 				});
 		});
 
-		// Add separator
+		// Add separator before resize options
 		menu.addSeparator();
 
+		// Add resize options
+		RESIZE_PERCENTAGES.forEach(percentage => {
+			menu.addItem((item) => {
+				item.setTitle(`Resize to ${percentage}%`)
+					.setIcon("image")
+					.onClick(async () => {
+						try {
+							await this.resizeImage(ev, percentage);
+						} catch (error) {
+							this.errorLog('Failed to resize:', error);
+							new Notice(`Failed to resize image to ${percentage}%`);
+						}
+					});
+			});
+		});
+	}
+
+	/**
+	 * Adds file operation menu items like Show in Finder/Explorer and Open in Default App
+	 */
+	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
 		// Add show in system explorer option
 		menu.addItem((item) => {
 			const isMac = this.isMacPlatform();
@@ -167,7 +196,7 @@ export default class PixelPerfectImage extends Plugin {
 						const activeFile = this.app.workspace.getActiveFile();
 						if (!activeFile) return;
 						
-						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
+						const imgFile = this.getFileForImage(target, activeFile);
 						if (!imgFile) {
 							new Notice('Could not locate image file');
 							return;
@@ -190,7 +219,7 @@ export default class PixelPerfectImage extends Plugin {
 						const activeFile = this.app.workspace.getActiveFile();
 						if (!activeFile) return;
 						
-						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
+						const imgFile = this.getFileForImage(target, activeFile);
 						if (!imgFile) {
 							new Notice('Could not locate image file');
 							return;
@@ -204,24 +233,30 @@ export default class PixelPerfectImage extends Plugin {
 				});
 		});
 
-		// Add separator
-		menu.addSeparator();
-
-		// Existing resize options
-		RESIZE_PERCENTAGES.forEach(percentage => {
+		// Add external editor option if enabled
+		if (this.settings.showExternalEditor) {
 			menu.addItem((item) => {
-				item.setTitle(`Resize to ${percentage}%`)
-					.setIcon("image")
+				const editorName = this.settings.externalEditorName.trim() || "External Editor";
+				item.setTitle(`Open in ${editorName}`)
+					.setIcon("open-elsewhere")
 					.onClick(async () => {
 						try {
-							await this.resizeImage(ev, percentage);
+							const activeFile = this.app.workspace.getActiveFile();
+							if (!activeFile) return;
+
+							const imgFile = this.getFileForImage(target, activeFile);
+							if (!imgFile) {
+								new Notice("Could not locate image file");
+								return;
+							}
+							this.openInExternalEditor(imgFile.path);
 						} catch (error) {
-							this.errorLog('Failed to resize:', error);
-							new Notice(`Failed to resize image to ${percentage}%`);
+							this.errorLog("Failed to open in external editor:", error);
+							new Notice(`Failed to open image in ${editorName}`);
 						}
 					});
 			});
-		});
+		}
 	}
 
 	// Image Operations
@@ -482,10 +517,7 @@ export default class PixelPerfectImage extends Plugin {
 	// --------------------------
 
 	private isMacPlatform(): boolean {
-		if ('userAgentData' in navigator) {
-			return (navigator as any).userAgentData.platform === 'macOS';
-		}
-		return navigator.platform.toLowerCase().includes('mac');
+		return isMacPlatform();
 	}
 
 	/**
@@ -508,5 +540,39 @@ export default class PixelPerfectImage extends Plugin {
 	private errorLog(...args: any[]) {
 		const timestamp = new Date().toTimeString().split(' ')[0];
 		console.error(`${timestamp}`, ...args);
+	}
+
+	// --- Add a helper function to launch external editor
+	private openInExternalEditor(filePath: string) {
+		const editorPath = this.settings.externalEditorPath;
+		const editorName = this.settings.externalEditorName.trim() || "External Editor";
+		if (!editorPath) {
+			new Notice(`Please set your ${editorName} path in Pixel Perfect Image settings.`);
+			return;
+		}
+
+		// 1. Get absolute path to the vault root
+		const vaultPath = (this.app.vault.adapter as any).basePath;
+		// 2. Combine vault root with the relative Obsidian path
+		const absoluteFilePath = join(vaultPath, normalizePath(filePath));
+
+		// 3. Choose command depending on macOS vs Windows
+		let cmd: string;
+		if (this.isMacPlatform()) {
+			// On macOS, use `open -a "/Applications/Editor.app" "/path/to/file.png"`
+			cmd = `open -a "${editorPath}" "${absoluteFilePath}"`;
+		} else {
+			// On Windows, quote-wrap the exe and file path
+			cmd = `"${editorPath}" "${absoluteFilePath}"`;
+		}
+
+		exec(cmd, (error) => {
+			if (error) {
+				this.errorLog(`Error launching ${editorName}:`, error);
+				new Notice(`Could not open file in ${editorName}.`);
+			} else {
+				this.debugLog(`Launched ${editorName}:`, cmd);
+			}
+		});
 	}
 }

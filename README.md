@@ -4,11 +4,17 @@ A plugin for [Obsidian](https://obsidian.md) that helps you resize images to the
 
 ## Features
 
-- 🔍 View actual image dimensions with a right-click
+- 🔍 View actual image dimensions and filename with a right-click
 - 📐 Resize images to common percentages (100%, 50%, 25%)
 - 🎯 Maintains pixel-perfect accuracy by calculating from original dimensions
+- 📋 Copy image directly to clipboard
+- 🔗 Copy local file path
+- 📂 Show in Finder/Explorer
+- 🖼️ Open in default system image viewer
+- 🎨 Open in external editor (configurable)
 - 💨 Fast performance with dimension caching
 - 🖼️ Works with all image formats supported by Obsidian
+- 🔄 Support for both wikilinks and standard Markdown image syntax
 
 ## Screenshot
 
@@ -19,8 +25,10 @@ A plugin for [Obsidian](https://obsidian.md) that helps you resize images to the
 1. Install the plugin from Obsidian's Community Plugins
 2. Right-click any image in your notes
 3. You'll see:
-   - The actual dimensions of the image in pixels
+   - The actual filename and dimensions of the image in pixels
    - Options to resize the image to common percentages
+   - File operations (copy, open, show in system)
+   - External editor integration
 
 The plugin will automatically calculate the new width based on the original image dimensions, ensuring pixel-perfect scaling.
 
@@ -47,13 +55,19 @@ After resizing to 50%:
 
 ## Settings
 
-- Debug Mode: Enable to see detailed logs in the developer console (useful for troubleshooting)
+- **Show File Information**: Toggle display of filename and dimensions in context menu
+- **External Editor Integration**:
+  - Enable/disable external editor option in context menu
+  - Configure external editor name and path
+- **Debug Mode**: Enable to see detailed logs in the developer console
 
 ## Technical Details
 
 - Resizing is non-destructive - it only modifies the width parameter in your Markdown links
 - The plugin caches image dimensions to avoid repeated file reads
-- Works with both simple image links and complex ones with subpaths or additional parameters
+- Works with both wikilinks (![[image.png]]) and standard Markdown images (![](image.png))
+- Supports complex image paths including subpaths and multiple parameters
+- Platform-aware functionality for both macOS and Windows
 
 ## Support
 
