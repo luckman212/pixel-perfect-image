@@ -14,7 +14,7 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Screenshot
 
-[Place your screenshot here showing the right-click context menu on an image]
+![screenshot](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot1.png?raw=true)
 
 ## How to Use
 
