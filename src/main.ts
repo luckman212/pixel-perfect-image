@@ -81,25 +81,19 @@ export default class PixelPerfectImage extends Plugin {
 		if (!this.settings.showFileInfo) return;
 
 		try {
-			const activeFile = this.app.workspace.getActiveFile();
-			if (!activeFile) return;
+			const result = await this.getImageFileWithErrorHandling(img);
+			if (!result) return;
 
-			const imgFile = this.getFileForImage(img, activeFile);
-			if (!imgFile) {
-				this.debugLog('Could not resolve image file');
-				return;
-			}
+			const { width, height } = await this.readImageDimensions(result.imgFile);
 
-			const { width, height } = await this.readImageDimensions(imgFile);
-
-			// Get current custom width if set
-			const customWidth = this.getCurrentImageWidth(img, activeFile, imgFile);
-			const scaleText = customWidth ? ` @ ${Math.round((customWidth / width) * 100)}%` : '';
+			// Get current scale if set
+			const currentScale = this.calculateImageScale(img, result.activeFile, result.imgFile, width);
+			const scaleText = currentScale !== null ? ` @ ${currentScale}%` : '';
 
 			// Add filename menu item with scale
 			menu.addItem((item) => {
 				item
-					.setTitle(`${imgFile.name}${scaleText}`)
+					.setTitle(`${result.imgFile.name}${scaleText}`)
 					.setIcon("image-file")
 					.setDisabled(true);
 			});
@@ -115,6 +109,20 @@ export default class PixelPerfectImage extends Plugin {
 			this.errorLog('Could not read dimensions:', error);
 			new Notice("Could not read image dimensions");
 		}
+	}
+
+	/**
+	 * Calculates the current scale of an image as a percentage
+	 * @param img - The HTML image element
+	 * @param activeFile - The active file
+	 * @param imageFile - The image file
+	 * @param actualWidth - The actual width of the image in pixels
+	 * @returns The current scale as a percentage, or null if no custom width is set
+	 */
+	private calculateImageScale(img: HTMLImageElement, activeFile: TFile, imageFile: TFile, actualWidth: number): number | null {
+		const customWidth = this.getCurrentImageWidth(img, activeFile, imageFile);
+		if (customWidth === null) return null;
+		return Math.round((customWidth / actualWidth) * 100);
 	}
 
 	/**
@@ -214,6 +222,31 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
+	 * Helper to create a menu item with consistent patterns
+	 * @param menu - The menu to add the item to
+	 * @param title - The title of the menu item
+	 * @param icon - The icon to use
+	 * @param action - The action to perform when clicked
+	 * @param errorMessage - The error message to show if the action fails
+	 * @param disabled - Whether the item should be disabled
+	 */
+	private addMenuItem(
+		menu: Menu,
+		title: string,
+		icon: string,
+		action: () => Promise<void>,
+		errorMessage: string,
+		disabled = false
+	): void {
+		menu.addItem((item) => {
+			item.setTitle(title)
+				.setIcon(icon)
+				.setDisabled(disabled)
+				.onClick(this.createMenuClickHandler(action, errorMessage));
+		});
+	}
+
+	/**
 	 * Adds resize percentage options to the context menu.
 	 * Each option will resize the image to the specified percentage of its original size.
 	 * @param menu - The context menu to add items to
@@ -221,37 +254,35 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private async addResizeMenuItems(menu: Menu, ev: MouseEvent): Promise<void> {
 		// Add copy to clipboard option first
-		menu.addItem((item) => {
-			item.setTitle('Copy Image')
-				.setIcon('copy')
-				.onClick(this.createMenuClickHandler(
-					async () => {
-						await this.copyImageToClipboard(ev.target as HTMLImageElement);
-						new Notice('Image copied to clipboard');
-					},
-					'Failed to copy image to clipboard'
-				));
-		});
+		this.addMenuItem(
+			menu,
+			'Copy Image',
+			'copy',
+			async () => {
+				await this.copyImageToClipboard(ev.target as HTMLImageElement);
+				new Notice('Image copied to clipboard');
+			},
+			'Failed to copy image to clipboard'
+		);
 
 		// Add copy local path option
-		menu.addItem((item) => {
-			item.setTitle('Copy Local Path')
-				.setIcon('link')
-				.onClick(this.createMenuClickHandler(
-					async () => {
-						const img = ev.target as HTMLImageElement;
-						const result = await this.getImageFileWithErrorHandling(img);
-						if (!result) return;
-						
-						// @ts-ignore - Using Electron's __dirname global
-						const vaultPath = (this.app.vault.adapter as any).basePath;
-						const fullPath = join(vaultPath, normalizePath(result.imgFile.path));
-						await navigator.clipboard.writeText(fullPath);
-						new Notice('File path copied to clipboard');
-					},
-					'Failed to copy file path'
-				));
-		});
+		this.addMenuItem(
+			menu,
+			'Copy Local Path',
+			'link',
+			async () => {
+				const img = ev.target as HTMLImageElement;
+				const result = await this.getImageFileWithErrorHandling(img);
+				if (!result) return;
+				
+				// @ts-ignore - Using Electron's __dirname global
+				const vaultPath = (this.app.vault.adapter as any).basePath;
+				const fullPath = join(vaultPath, normalizePath(result.imgFile.path));
+				await navigator.clipboard.writeText(fullPath);
+				new Notice('File path copied to clipboard');
+			},
+			'Failed to copy file path'
+		);
 
 		// Add separator before resize options
 		menu.addSeparator();
@@ -260,43 +291,36 @@ export default class PixelPerfectImage extends Plugin {
 		const img = ev.target as HTMLImageElement;
 		const result = await this.getImageFileWithErrorHandling(img);
 		let currentScale: number | null = null;
-		let customWidth: number | null = null;
 		
 		if (result) {
-			customWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
-			if (customWidth !== null) {
-				const { width } = await this.readImageDimensions(result.imgFile);
-				currentScale = Math.round((customWidth / width) * 100);
-			}
+			const { width } = await this.readImageDimensions(result.imgFile);
+			currentScale = this.calculateImageScale(img, result.activeFile, result.imgFile, width);
 		}
 
 		// Add resize options
 		RESIZE_PERCENTAGES.forEach(percentage => {
-			menu.addItem((item) => {
-				item.setTitle(`Resize to ${percentage}%`)
-					.setIcon("image")
-					.setDisabled(currentScale === percentage)
-					.onClick(this.createMenuClickHandler(
-						async () => {
-							await this.resizeImage(ev, percentage);
-						},
-						`Failed to resize image to ${percentage}%`
-					));
-			});
+			this.addMenuItem(
+				menu,
+				`Resize to ${percentage}%`,
+				'image',
+				async () => await this.resizeImage(ev, percentage),
+				`Failed to resize image to ${percentage}%`,
+				currentScale === percentage
+			);
 		});
 
 		// Add option to remove custom size if one is set
-		if (result && customWidth !== null) {
-			menu.addItem((item) => {
-				item.setTitle('Remove Custom Size')
-					.setIcon('reset')
-					.onClick(this.createMenuClickHandler(
-						async () => {
-							await this.removeImageWidth(result.imgFile);
-						},
-						'Failed to remove custom size from image'
-					));
-			});
+		if (result && currentScale !== null) {
+			this.addMenuItem(
+				menu,
+				'Remove Custom Size',
+				'reset',
+				async () => {
+					await this.removeImageWidth(result.imgFile);
+					new Notice('Removed custom size from image');
+				},
+				'Failed to remove custom size from image'
+			);
 		}
 	}
 
@@ -305,49 +329,46 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
 		// Add show in system explorer option
-		menu.addItem((item) => {
-			const isMac = isMacPlatform();
-			item.setTitle(isMac ? 'Show in Finder' : 'Show in Explorer')
-				.setIcon('folder-open')
-				.onClick(this.createMenuClickHandler(
-					async () => {
-						const result = await this.getImageFileWithErrorHandling(target);
-						if (!result) return;
-						this.app.showInFolder(result.imgFile.path);
-					},
-					'Failed to open system explorer'
-				));
-		});
+		const isMac = isMacPlatform();
+		this.addMenuItem(
+			menu,
+			isMac ? 'Show in Finder' : 'Show in Explorer',
+			'folder-open',
+			async () => {
+				const result = await this.getImageFileWithErrorHandling(target);
+				if (!result) return;
+				this.app.showInFolder(result.imgFile.path);
+			},
+			'Failed to open system explorer'
+		);
 
 		// Add open in default app option
-		menu.addItem((item) => {
-			item.setTitle('Open in Default App')
-				.setIcon('open-elsewhere')
-				.onClick(this.createMenuClickHandler(
-					async () => {
-						const result = await this.getImageFileWithErrorHandling(target);
-						if (!result) return;
-						this.app.openWithDefaultApp(result.imgFile.path);
-					},
-					'Failed to open in default app'
-				));
-		});
+		this.addMenuItem(
+			menu,
+			'Open in Default App',
+			'open-elsewhere',
+			async () => {
+				const result = await this.getImageFileWithErrorHandling(target);
+				if (!result) return;
+				this.app.openWithDefaultApp(result.imgFile.path);
+			},
+			'Failed to open in default app'
+		);
 
 		// Add external editor option if enabled
 		if (this.settings.showExternalEditor) {
-			menu.addItem((item) => {
-				const editorName = this.settings.externalEditorName.trim() || "External Editor";
-				item.setTitle(`Open in ${editorName}`)
-					.setIcon("open-elsewhere")
-					.onClick(this.createMenuClickHandler(
-						async () => {
-							const result = await this.getImageFileWithErrorHandling(target);
-							if (!result) return;
-							this.openInExternalEditor(result.imgFile.path);
-						},
-						`Failed to open image in ${editorName}`
-					));
-			});
+			const editorName = this.settings.externalEditorName.trim() || "External Editor";
+			this.addMenuItem(
+				menu,
+				`Open in ${editorName}`,
+				'open-elsewhere',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					this.openInExternalEditor(result.imgFile.path);
+				},
+				`Failed to open image in ${editorName}`
+			);
 		}
 	}
 
