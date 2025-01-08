@@ -58,7 +58,7 @@ export default class PixelPerfectImage extends Plugin {
 
 			const menu = new Menu();
 			await this.addDimensionsMenuItem(menu, target);
-			this.addResizeMenuItems(menu, ev);
+			await this.addResizeMenuItems(menu, ev);
 			
 			// Add separator before file operations
 			menu.addSeparator();
@@ -175,7 +175,7 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param menu - The context menu to add items to
 	 * @param ev - The original mouse event
 	 */
-	private addResizeMenuItems(menu: Menu, ev: MouseEvent): void {
+	private async addResizeMenuItems(menu: Menu, ev: MouseEvent): Promise<void> {
 		// Add copy to clipboard option first
 		menu.addItem((item) => {
 			item.setTitle('Copy Image')
@@ -221,11 +221,28 @@ export default class PixelPerfectImage extends Plugin {
 		// Add separator before resize options
 		menu.addSeparator();
 
+		// Get current scale if set
+		const img = ev.target as HTMLImageElement;
+		const activeFile = this.app.workspace.getActiveFile();
+		let currentScale: number | null = null;
+		
+		if (activeFile) {
+			const imgFile = this.getFileForImage(img, activeFile);
+			if (imgFile) {
+				const customWidth = this.getCurrentImageWidth(img, activeFile, imgFile);
+				if (customWidth !== null) {
+					const { width } = await this.readImageDimensions(imgFile);
+					currentScale = Math.round((customWidth / width) * 100);
+				}
+			}
+		}
+
 		// Add resize options
 		RESIZE_PERCENTAGES.forEach(percentage => {
 			menu.addItem((item) => {
 				item.setTitle(`Resize to ${percentage}%`)
 					.setIcon("image")
+					.setDisabled(currentScale === percentage)
 					.onClick(async () => {
 						try {
 							await this.resizeImage(ev, percentage);
@@ -238,8 +255,6 @@ export default class PixelPerfectImage extends Plugin {
 		});
 
 		// Add option to remove custom size if one is set
-		const img = ev.target as HTMLImageElement;
-		const activeFile = this.app.workspace.getActiveFile();
 		if (activeFile) {
 			const imgFile = this.getFileForImage(img, activeFile);
 			if (imgFile && this.getCurrentImageWidth(img, activeFile, imgFile) !== null) {
