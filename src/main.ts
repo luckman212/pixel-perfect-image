@@ -2,7 +2,7 @@ import { Menu, MarkdownView, Notice, Plugin, TFile, App, normalizePath } from 'o
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
 
-// Used for Reveal in Navigation
+// Used for "Show in Finder"
 declare module 'obsidian' {
 	interface App {
 		showInFolder(path: string): void;
