@@ -131,6 +131,13 @@ export default class PixelPerfectImage extends Plugin {
 		const docText = editor.getValue();
 		let customWidth: number | null = null;
 
+		// Helper to parse width from parameters
+		const parseWidth = (pipeParams: string[]): number | null => {
+			if (pipeParams.length === 0) return null;
+			const width = parseInt(pipeParams[0]);
+			return isNaN(width) ? null : width;
+		};
+
 		// Check wiki-style links
 		docText.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
 			// Handle subpath components (e.g., #heading)
@@ -140,9 +147,9 @@ export default class PixelPerfectImage extends Plugin {
 			let [linkPath, ...pipeParams] = linkWithoutHash.split("|");
 
 			const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
-			if (resolvedFile?.path === imageFile.path && pipeParams.length > 0) {
-				const width = parseInt(pipeParams[0]);
-				if (!isNaN(width)) {
+			if (resolvedFile?.path === imageFile.path) {
+				const width = parseWidth(pipeParams);
+				if (width !== null) {
 					customWidth = width;
 				}
 			}
@@ -156,9 +163,9 @@ export default class PixelPerfectImage extends Plugin {
 				let [desc, ...pipeParams] = description.split("|");
 				
 				const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
-				if (resolvedFile?.path === imageFile.path && pipeParams.length > 0) {
-					const width = parseInt(pipeParams[0]);
-					if (!isNaN(width)) {
+				if (resolvedFile?.path === imageFile.path) {
+					const width = parseWidth(pipeParams);
+					if (width !== null) {
 						customWidth = width;
 					}
 				}
@@ -167,6 +174,43 @@ export default class PixelPerfectImage extends Plugin {
 		}
 
 		return customWidth;
+	}
+
+	/**
+	 * Helper to safely get the image file with common error handling
+	 * @param img - The HTML image element
+	 * @returns Object containing the active file and image file, or null if either cannot be found
+	 */
+	private async getImageFileWithErrorHandling(img: HTMLImageElement): Promise<{ activeFile: TFile; imgFile: TFile } | null> {
+		const activeFile = this.app.workspace.getActiveFile();
+		if (!activeFile) {
+			return null;
+		}
+
+		const imgFile = this.getFileForImage(img, activeFile);
+		if (!imgFile) {
+			new Notice('Could not locate image file');
+			return null;
+		}
+
+		return { activeFile, imgFile };
+	}
+
+	/**
+	 * Helper to wrap menu item click handlers with common error handling
+	 * @param action - The action to perform
+	 * @param errorMessage - The message to show on error
+	 * @returns An async function that can be used as a click handler
+	 */
+	private createMenuClickHandler(action: () => Promise<void>, errorMessage: string): () => Promise<void> {
+		return async () => {
+			try {
+				await action();
+			} catch (error) {
+				this.errorLog(errorMessage, error);
+				new Notice(errorMessage);
+			}
+		};
 	}
 
 	/**
@@ -180,60 +224,49 @@ export default class PixelPerfectImage extends Plugin {
 		menu.addItem((item) => {
 			item.setTitle('Copy Image')
 				.setIcon('copy')
-				.onClick(async () => {
-					try {
+				.onClick(this.createMenuClickHandler(
+					async () => {
 						await this.copyImageToClipboard(ev.target as HTMLImageElement);
 						new Notice('Image copied to clipboard');
-					} catch (error) {
-						this.errorLog('Failed to copy image:', error);
-						new Notice('Failed to copy image to clipboard');
-					}
-				});
+					},
+					'Failed to copy image to clipboard'
+				));
 		});
 
 		// Add copy local path option
 		menu.addItem((item) => {
 			item.setTitle('Copy Local Path')
 				.setIcon('link')
-				.onClick(async () => {
-					try {
-						const activeFile = this.app.workspace.getActiveFile();
-						if (!activeFile) return;
-						
-						const imgFile = this.getFileForImage(ev.target as HTMLImageElement, activeFile);
-						if (!imgFile) {
-							new Notice('Could not locate image file');
-							return;
-						}
+				.onClick(this.createMenuClickHandler(
+					async () => {
+						const img = ev.target as HTMLImageElement;
+						const result = await this.getImageFileWithErrorHandling(img);
+						if (!result) return;
 						
 						// @ts-ignore - Using Electron's __dirname global
 						const vaultPath = (this.app.vault.adapter as any).basePath;
-						const fullPath = join(vaultPath, normalizePath(imgFile.path));
+						const fullPath = join(vaultPath, normalizePath(result.imgFile.path));
 						await navigator.clipboard.writeText(fullPath);
 						new Notice('File path copied to clipboard');
-					} catch (error) {
-						this.errorLog('Failed to copy file path:', error);
-						new Notice('Failed to copy file path');
-					}
-				});
+					},
+					'Failed to copy file path'
+				));
 		});
 
 		// Add separator before resize options
 		menu.addSeparator();
 
-		// Get current scale if set
+		// Get current scale and file info
 		const img = ev.target as HTMLImageElement;
-		const activeFile = this.app.workspace.getActiveFile();
+		const result = await this.getImageFileWithErrorHandling(img);
 		let currentScale: number | null = null;
+		let customWidth: number | null = null;
 		
-		if (activeFile) {
-			const imgFile = this.getFileForImage(img, activeFile);
-			if (imgFile) {
-				const customWidth = this.getCurrentImageWidth(img, activeFile, imgFile);
-				if (customWidth !== null) {
-					const { width } = await this.readImageDimensions(imgFile);
-					currentScale = Math.round((customWidth / width) * 100);
-				}
+		if (result) {
+			customWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
+			if (customWidth !== null) {
+				const { width } = await this.readImageDimensions(result.imgFile);
+				currentScale = Math.round((customWidth / width) * 100);
 			}
 		}
 
@@ -243,35 +276,27 @@ export default class PixelPerfectImage extends Plugin {
 				item.setTitle(`Resize to ${percentage}%`)
 					.setIcon("image")
 					.setDisabled(currentScale === percentage)
-					.onClick(async () => {
-						try {
+					.onClick(this.createMenuClickHandler(
+						async () => {
 							await this.resizeImage(ev, percentage);
-						} catch (error) {
-							this.errorLog('Failed to resize:', error);
-							new Notice(`Failed to resize image to ${percentage}%`);
-						}
-					});
+						},
+						`Failed to resize image to ${percentage}%`
+					));
 			});
 		});
 
 		// Add option to remove custom size if one is set
-		if (activeFile) {
-			const imgFile = this.getFileForImage(img, activeFile);
-			if (imgFile && this.getCurrentImageWidth(img, activeFile, imgFile) !== null) {
-				menu.addItem((item) => {
-					item.setTitle('Remove Custom Size')
-						.setIcon('reset')
-						.onClick(async () => {
-							try {
-								await this.removeImageWidth(imgFile);
-								new Notice('Removed custom size from image');
-							} catch (error) {
-								this.errorLog('Failed to remove custom size:', error);
-								new Notice('Failed to remove custom size from image');
-							}
-						});
-				});
-			}
+		if (result && customWidth !== null) {
+			menu.addItem((item) => {
+				item.setTitle('Remove Custom Size')
+					.setIcon('reset')
+					.onClick(this.createMenuClickHandler(
+						async () => {
+							await this.removeImageWidth(result.imgFile);
+						},
+						'Failed to remove custom size from image'
+					));
+			});
 		}
 	}
 
@@ -284,46 +309,28 @@ export default class PixelPerfectImage extends Plugin {
 			const isMac = isMacPlatform();
 			item.setTitle(isMac ? 'Show in Finder' : 'Show in Explorer')
 				.setIcon('folder-open')
-				.onClick(async () => {
-					try {
-						const activeFile = this.app.workspace.getActiveFile();
-						if (!activeFile) return;
-						
-						const imgFile = this.getFileForImage(target, activeFile);
-						if (!imgFile) {
-							new Notice('Could not locate image file');
-							return;
-						}
-						
-						this.app.showInFolder(imgFile.path);
-					} catch (error) {
-						this.errorLog('Failed to show in system explorer:', error);
-						new Notice('Failed to open system explorer');
-					}
-				});
+				.onClick(this.createMenuClickHandler(
+					async () => {
+						const result = await this.getImageFileWithErrorHandling(target);
+						if (!result) return;
+						this.app.showInFolder(result.imgFile.path);
+					},
+					'Failed to open system explorer'
+				));
 		});
 
 		// Add open in default app option
 		menu.addItem((item) => {
 			item.setTitle('Open in Default App')
 				.setIcon('open-elsewhere')
-				.onClick(async () => {
-					try {
-						const activeFile = this.app.workspace.getActiveFile();
-						if (!activeFile) return;
-						
-						const imgFile = this.getFileForImage(target, activeFile);
-						if (!imgFile) {
-							new Notice('Could not locate image file');
-							return;
-						}
-						
-						this.app.openWithDefaultApp(imgFile.path);
-					} catch (error) {
-						this.errorLog('Failed to open in default app:', error);
-						new Notice('Failed to open in default app');
-					}
-				});
+				.onClick(this.createMenuClickHandler(
+					async () => {
+						const result = await this.getImageFileWithErrorHandling(target);
+						if (!result) return;
+						this.app.openWithDefaultApp(result.imgFile.path);
+					},
+					'Failed to open in default app'
+				));
 		});
 
 		// Add external editor option if enabled
@@ -332,22 +339,14 @@ export default class PixelPerfectImage extends Plugin {
 				const editorName = this.settings.externalEditorName.trim() || "External Editor";
 				item.setTitle(`Open in ${editorName}`)
 					.setIcon("open-elsewhere")
-					.onClick(async () => {
-						try {
-							const activeFile = this.app.workspace.getActiveFile();
-							if (!activeFile) return;
-
-							const imgFile = this.getFileForImage(target, activeFile);
-							if (!imgFile) {
-								new Notice("Could not locate image file");
-								return;
-							}
-							this.openInExternalEditor(imgFile.path);
-						} catch (error) {
-							this.errorLog("Failed to open in external editor:", error);
-							new Notice(`Failed to open image in ${editorName}`);
-						}
-					});
+					.onClick(this.createMenuClickHandler(
+						async () => {
+							const result = await this.getImageFileWithErrorHandling(target);
+							if (!result) return;
+							this.openInExternalEditor(result.imgFile.path);
+						},
+						`Failed to open image in ${editorName}`
+					));
 			});
 		}
 	}
@@ -362,22 +361,14 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private async resizeImage(ev: MouseEvent, percentage: number) {
 		const img = ev.target as HTMLImageElement;
-		const src = img.getAttribute('src') ?? "";
-
-		const activeFile = this.app.workspace.getActiveFile();
-		if (!activeFile) {
-			throw new Error("No active file in workspace to update a link.");
-		}
-
-		// Use getFileForImage instead of trying to resolve from alt text
-		const imgFile = this.getFileForImage(img, activeFile);
-		if (!imgFile) {
+		const result = await this.getImageFileWithErrorHandling(img);
+		if (!result) {
 			throw new Error("Could not find the image file");
 		}
 
-		const { width } = await this.readImageDimensions(imgFile);
+		const { width } = await this.readImageDimensions(result.imgFile);
 		const newWidth = Math.round((width * percentage) / 100);
-		await this.updateImageLinkWidth(imgFile, newWidth);
+		await this.updateImageLinkWidth(result.imgFile, newWidth);
 	}
 
 	/**
