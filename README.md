@@ -4,14 +4,14 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Features
 
-- 📐 **Pixel perfect resize:** Resize images to pixel perfect percentages (100%, 50%, 25%)
+- 📐 **Pixel perfect resize:** Quickly resize images to pixel perfect percentages (100%, 50%, 25%)
 - 📋️ **Mousewheel support:** Quick resize with mousewheel (hold Alt/Option and scroll)
-- 📋 **Copy image to clipboard**
-- 🔗 **Copy local file path to clipboard**
-- 📂 **Show in Finder/Explorer**
-- 🖼️ **Open in default system viewer**
-- 🎨 **Open in Photoshop**, or any other external editor like Affinity Photo.
-- 🔄 **Works with both wikilinks and standard Markdown images**
+- 📋 **Copy image to clipboard:** For quick paste into other programs
+- 🔗 **Copy local file path to clipboard:** If you want to access the image from terminal
+- 📂 **Show in Finder/Explorer:** Open file browser with your image selected
+- 🖼️ **Open in default system viewer:** Open the image in your default application
+- 🎨 **Open in External Editor:** Open the image directly in an external editor like Photoshop or Affinity Photo.
+- 🔄 **Works with both Wikilinks and standard Markdown image links**
 
 ## Screenshot
 
