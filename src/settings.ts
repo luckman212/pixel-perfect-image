@@ -11,7 +11,7 @@ export interface PixelPerfectImageSettings {
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
 	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
-	wheelStepSize: number;
+	wheelZoomPercentage: number;
 	invertScrollDirection: boolean;
 }
 
@@ -24,7 +24,7 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
 	wheelModifierKey: 'Alt',
-	wheelStepSize: 50,
+	wheelZoomPercentage: 20,
 	invertScrollDirection: false
 };
 
@@ -86,16 +86,16 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Step Size")
-			.setDesc("How many pixels to change per scroll step.")
+			.setName("Zoom Step Size")
+			.setDesc("Percentage of current width to zoom per scroll step.")
 			.addText(text => {
 				text
-					.setPlaceholder("50")
-					.setValue(this.plugin.settings.wheelStepSize.toString())
+					.setPlaceholder("20")
+					.setValue(this.plugin.settings.wheelZoomPercentage.toString())
 					.onChange(async (value) => {
 						const numValue = parseInt(value);
 						if (!isNaN(numValue) && numValue > 0) {
-							this.plugin.settings.wheelStepSize = numValue;
+							this.plugin.settings.wheelZoomPercentage = numValue;
 							await this.plugin.saveSettings();
 						}
 					});

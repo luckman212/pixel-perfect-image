@@ -170,6 +170,8 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	private async handleImageWheel(evt: WheelEvent, target: HTMLImageElement) {
+		if (!this.settings.enableWheelZoom) return;
+		
 		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
 		if (!markdownView?.file) return;
 
@@ -182,15 +184,15 @@ export default class PixelPerfectImage extends Plugin {
 		// Use the custom width if set, otherwise use original width
 		const currentWidth = customWidth ?? width;
 		
-		// Use fixed step size from settings
-		const stepSize = this.settings.wheelStepSize;
+		// Calculate step size based on the zoom percentage setting
+		const stepSize = Math.max(1, Math.round(currentWidth * (this.settings.wheelZoomPercentage / 100)));
 		
 		// Adjust width based on scroll direction
 		const scrollingUp = evt.deltaY < 0;
 		const shouldIncrease = this.settings.invertScrollDirection ? !scrollingUp : scrollingUp;
 		const newWidth = shouldIncrease
 			? currentWidth + stepSize
-			: Math.max(stepSize, currentWidth - stepSize);
+			: Math.max(1, currentWidth - stepSize);
 
 		// Only update if the width has actually changed
 		if (newWidth !== currentWidth) {
