@@ -29,13 +29,16 @@ export default class PixelPerfectImage extends Plugin {
 	private debounceTimer: number | null = null;
 
 	private debounce(func: Function, wait: number) {
-		if (this.debounceTimer) {
-			window.clearTimeout(this.debounceTimer);
-		}
-		this.debounceTimer = window.setTimeout(() => {
-			func();
-			this.debounceTimer = null;
-		}, wait);
+		return new Promise<void>((resolve) => {
+			if (this.debounceTimer) {
+				window.clearTimeout(this.debounceTimer);
+			}
+			this.debounceTimer = window.setTimeout(() => {
+				func();
+				this.debounceTimer = null;
+				resolve();
+			}, wait);
+		});
 	}
 
 	async onload() {
@@ -114,8 +117,8 @@ export default class PixelPerfectImage extends Plugin {
 
 				evt.preventDefault();
 				
-				// Use debounce instead of time comparison
-				this.debounce(async () => {
+				// Debounce and execute the wheel handler
+				await this.debounce(async () => {
 					try {
 						await this.handleImageWheel(evt, target);
 					} catch (error) {
@@ -128,7 +131,7 @@ export default class PixelPerfectImage extends Plugin {
 			}
 		};
 
-		// Register all event handlers
+		// Register all event handlers with non-passive wheel listener
 		this.registerDomEvent(doc, "keydown", keydownHandler);
 		this.registerDomEvent(doc, "keyup", keyupHandler);
 		this.registerDomEvent(window, "blur", blurHandler);
@@ -195,7 +198,6 @@ export default class PixelPerfectImage extends Plugin {
 		// Only update if the width has actually changed
 		if (newWidth !== currentWidth) {
 			await this.updateImageLinkWidth(result.imgFile, newWidth);
-			this.debugLog(`Updated image size from ${currentWidth}px to ${newWidth}px`);
 		}
 	}
 
