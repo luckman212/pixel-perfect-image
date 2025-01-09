@@ -27,6 +27,7 @@ export default class PixelPerfectImage extends Plugin {
 	private lastWheelTime = 0;
 	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private debounceTimer: number | null = null;
+	private wheelEventCleanup: (() => void) | null = null;
 
 	private debounce(func: Function, wait: number) {
 		return new Promise<void>((resolve) => {
@@ -76,8 +77,6 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	private registerWheelEvents(currentWindow: Window) {
-		if (!this.settings.enableWheelZoom) return;
-
 		const doc = currentWindow.document;
 
 		// Handle modifier key press
@@ -104,7 +103,8 @@ export default class PixelPerfectImage extends Plugin {
 		// Create bound event handler for cleanup
 		const wheelHandler = async (evt: WheelEvent) => {
 			try {
-				if (!this.isModifierKeyHeld) return;
+				// If zoom is not enabled or modifier not held, let default scroll happen
+				if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
 
 				// Verify key is still held (handles Alt+Tab cases)
 				if (!this.isModifierKeyStillHeld(evt)) {
@@ -115,12 +115,13 @@ export default class PixelPerfectImage extends Plugin {
 				const target = evt.target;
 				if (!(target instanceof HTMLImageElement)) return;
 
+				// Only prevent default if we're actually going to handle the zoom
 				evt.preventDefault();
 				
 				// Debounce and execute the wheel handler
 				await this.debounce(async () => {
 					try {
-						await this.handleImageWheel(evt, target);
+							await this.handleImageWheel(evt, target);
 					} catch (error) {
 						this.errorLog('Error handling wheel event:', error);
 						new Notice('Failed to resize image');
@@ -137,10 +138,11 @@ export default class PixelPerfectImage extends Plugin {
 		this.registerDomEvent(window, "blur", blurHandler);
 		doc.addEventListener("wheel", wheelHandler, { passive: false });
 
-		// Store the wheel event listener for cleanup
-		this.register(() => {
+		// Store cleanup function
+		this.wheelEventCleanup = () => {
 			doc.removeEventListener("wheel", wheelHandler);
-		});
+			this.debugLog('Wheel events cleaned up');
+		};
 	}
 
 	private isModifierKeyMatch(evt: KeyboardEvent): boolean {

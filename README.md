@@ -4,14 +4,14 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Features
 
-- 📐 Resize images to pixel perfect percentages (100%, 50%, 25%)
-- 📋️ Quick resize with mousewheel (hold Alt/Option and scroll)
-- 📋 Copy image to clipboard
-- 🔗 Copy file path to clipboard
-- 📂 Show in Finder/Explorer
-- 🖼️ Open in default system viewer
-- 🎨 Open in external editor like Photoshop, Affinity Photo, etc.
-- 🔄 Work with both wikilinks and standard Markdown images
+- 📐 **Pixel perfect resize:** Resize images to pixel perfect percentages (100%, 50%, 25%)
+- 📋️ **Mousewheel support:** Quick resize with mousewheel (hold Alt/Option and scroll)
+- 📋 **Copy image to clipboard**
+- 🔗 **Copy local file path to clipboard**
+- 📂 **Show in Finder/Explorer**
+- 🖼️ **Open in default system viewer**
+- 🎨 **Open in Photoshop**, or any other external editor like Affinity Photo.
+- 🔄 **Works with both wikilinks and standard Markdown images**
 
 ## Screenshot
 
@@ -30,7 +30,8 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
    - Hold Alt key (Option on macOS) and scroll over an image
    - Scroll up to increase size, down to decrease
    - Modifier key can be changed in settings (Alt/Ctrl/Shift)
-   - Scroll speed affects resize step size for precise control
+   - Zoom percentage can be adjusted in settings (default 20%)
+   - Each scroll step changes size by the configured percentage of current width
 
 The plugin calculates the new width based on the original image dimensions.
 
