@@ -25,7 +25,7 @@ export default class PixelPerfectImage extends Plugin {
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
 	private lastWheelTime = 0;
-	private readonly WHEEL_DEBOUNCE_MS = 50; // Minimum time between wheel updates
+	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private debounceTimer: number | null = null;
 
 	private debounce(func: Function, wait: number) {
@@ -177,23 +177,20 @@ export default class PixelPerfectImage extends Plugin {
 		if (!result) return;
 
 		const { width } = await this.readImageDimensions(result.imgFile);
-		const currentScale = this.calculateImageScale(target, result.activeFile, result.imgFile, width);
+		const customWidth = this.getCurrentImageWidth(target, result.activeFile, result.imgFile);
 		
-		// Calculate new width
-		const currentWidth = currentScale === null ? width : Math.round((width * currentScale) / 100);
+		// Use the custom width if set, otherwise use original width
+		const currentWidth = customWidth ?? width;
 		
-		// Calculate step size based on scroll speed
-		const stepSize = Math.max(
-			this.settings.wheelStepSize,
-			Math.abs(Math.round(evt.deltaY / 2))
-		);
+		// Use fixed step size from settings
+		const stepSize = this.settings.wheelStepSize;
 		
 		// Adjust width based on scroll direction
 		const scrollingUp = evt.deltaY < 0;
 		const shouldIncrease = this.settings.invertScrollDirection ? !scrollingUp : scrollingUp;
 		const newWidth = shouldIncrease
 			? currentWidth + stepSize
-			: Math.max(this.settings.wheelStepSize, currentWidth - stepSize);
+			: Math.max(stepSize, currentWidth - stepSize);
 
 		// Only update if the width has actually changed
 		if (newWidth !== currentWidth) {
@@ -656,13 +653,27 @@ export default class PixelPerfectImage extends Plugin {
 		const docText = editor.getValue();
 		let didChange = false;
 		
-		// Handle both link types
-		let replacedText = this.updateWikiLinks(docText, activeFile, imageFile, transform);
+		// Skip frontmatter if present
+		let contentWithoutFrontmatter = docText;
+		let frontmatter = '';
+		if (docText.startsWith('---\n')) {
+			const frontmatterEnd = docText.indexOf('\n---\n', 4);
+			if (frontmatterEnd !== -1) {
+				frontmatter = docText.substring(0, frontmatterEnd + 5);
+				contentWithoutFrontmatter = docText.substring(frontmatterEnd + 5);
+			}
+		}
+		
+		// Handle both link types, but only in the content part
+		let replacedText = this.updateWikiLinks(contentWithoutFrontmatter, activeFile, imageFile, transform);
 		replacedText = this.updateMarkdownLinks(replacedText, activeFile, imageFile, transform);
 
-		if (replacedText !== docText) {
+		// Only update if content part changed
+		if (replacedText !== contentWithoutFrontmatter) {
 			try {
-				editor.setValue(replacedText);
+				// Combine frontmatter (if any) with updated content
+				const finalText = frontmatter + replacedText;
+				editor.setValue(finalText);
 				didChange = true;
 			} catch (error) {
 				this.errorLog('Failed to update editor content:', error);
