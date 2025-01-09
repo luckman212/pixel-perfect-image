@@ -288,6 +288,12 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to copy file path'
 		);
 
+		// Only show resize options in editing mode
+		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (markdownView?.getMode() !== 'source') {
+			return;
+		}
+
 		// Add separator before resize options
 		menu.addSeparator();
 
