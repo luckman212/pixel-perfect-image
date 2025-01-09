@@ -8,6 +8,11 @@ export interface PixelPerfectImageSettings {
 	showExternalEditor: boolean;
 	externalEditorName: string;
 	externalEditorPath: string;
+	// Mousewheel zoom settings
+	enableWheelZoom: boolean;
+	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
+	wheelStepSize: number;
+	invertScrollDirection: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
@@ -15,7 +20,12 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	showFileInfo: true,
 	showExternalEditor: true,
 	externalEditorName: "",
-	externalEditorPath: ""
+	externalEditorPath: "",
+	// Mousewheel zoom defaults
+	enableWheelZoom: true,
+	wheelModifierKey: 'Alt',
+	wheelStepSize: 50,
+	invertScrollDirection: false
 };
 
 export class PixelPerfectImageSettingTab extends PluginSettingTab {
@@ -39,6 +49,66 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.showFileInfo)
 					.onChange(async (value: boolean) => {
 						this.plugin.settings.showFileInfo = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName('Mousewheel Zoom')
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName("Enable Mousewheel Zoom")
+			.setDesc("Hold modifier key and use mousewheel to resize images.")
+			.addToggle(toggle => {
+				toggle
+					.setValue(this.plugin.settings.enableWheelZoom)
+					.onChange(async (value: boolean) => {
+						this.plugin.settings.enableWheelZoom = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Modifier Key")
+			.setDesc("Key to hold while using mousewheel to zoom.")
+			.addDropdown(dropdown => {
+				const isMac = isMacPlatform();
+				dropdown
+					.addOption('Alt', isMac ? 'Option' : 'Alt')
+					.addOption('Ctrl', 'Ctrl')
+					.addOption('Shift', 'Shift')
+					.setValue(this.plugin.settings.wheelModifierKey)
+					.onChange(async (value: 'Alt' | 'Ctrl' | 'Shift') => {
+						this.plugin.settings.wheelModifierKey = value;
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Step Size")
+			.setDesc("How many pixels to change per scroll step.")
+			.addText(text => {
+				text
+					.setPlaceholder("50")
+					.setValue(this.plugin.settings.wheelStepSize.toString())
+					.onChange(async (value) => {
+						const numValue = parseInt(value);
+						if (!isNaN(numValue) && numValue > 0) {
+							this.plugin.settings.wheelStepSize = numValue;
+							await this.plugin.saveSettings();
+						}
+					});
+			});
+
+		new Setting(containerEl)
+			.setName("Invert Scroll Direction")
+			.setDesc("Invert the direction of mousewheel zooming.")
+			.addToggle(toggle => {
+				toggle
+					.setValue(this.plugin.settings.invertScrollDirection)
+					.onChange(async (value: boolean) => {
+						this.plugin.settings.invertScrollDirection = value;
 						await this.plugin.saveSettings();
 					});
 			});

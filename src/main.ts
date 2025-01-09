@@ -23,12 +23,180 @@ export default class PixelPerfectImage extends Plugin {
 	settings: PixelPerfectImageSettings;
 	/** Cache to store image dimensions to avoid repeated file reads */
 	private dimensionCache = new Map<string, { width: number; height: number }>();
+	private isModifierKeyHeld = false;
+	private lastWheelTime = 0;
+	private readonly WHEEL_DEBOUNCE_MS = 50; // Minimum time between wheel updates
+	private debounceTimer: number | null = null;
+
+	private debounce(func: Function, wait: number) {
+		if (this.debounceTimer) {
+			window.clearTimeout(this.debounceTimer);
+		}
+		this.debounceTimer = window.setTimeout(() => {
+			func();
+			this.debounceTimer = null;
+		}, wait);
+	}
 
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new PixelPerfectImageSettingTab(this.app, this));
 		this.registerImageContextMenu();
+		
+		// Register mousewheel zoom events
+		this.registerEvent(
+			this.app.workspace.on("layout-change", () => this.registerWheelEvents(window))
+		);
+		this.registerWheelEvents(window);
+
 		this.debugLog('Plugin loaded');
+	}
+
+	onunload() {
+		// Clear any pending debounce timer
+		if (this.debounceTimer) {
+			window.clearTimeout(this.debounceTimer);
+			this.debounceTimer = null;
+		}
+		// Reset state
+		this.isModifierKeyHeld = false;
+		this.dimensionCache.clear();
+	}
+
+	private setModifierKeyState(isHeld: boolean) {
+		this.isModifierKeyHeld = isHeld;
+		if (!isHeld && this.debounceTimer) {
+			window.clearTimeout(this.debounceTimer);
+			this.debounceTimer = null;
+		}
+		this.debugLog(`Modifier key ${isHeld ? 'pressed' : 'released'}`);
+	}
+
+	private registerWheelEvents(currentWindow: Window) {
+		if (!this.settings.enableWheelZoom) return;
+
+		const doc = currentWindow.document;
+
+		// Handle modifier key press
+		const keydownHandler = (evt: KeyboardEvent) => {
+			if (this.isModifierKeyMatch(evt)) {
+				this.setModifierKeyState(true);
+			}
+		};
+
+		// Handle modifier key release
+		const keyupHandler = (evt: KeyboardEvent) => {
+			if (this.isModifierKeyMatch(evt)) {
+				this.setModifierKeyState(false);
+			}
+		};
+
+		// Handle window blur to reset state
+		const blurHandler = () => {
+			if (this.isModifierKeyHeld) {
+				this.setModifierKeyState(false);
+			}
+		};
+
+		// Create bound event handler for cleanup
+		const wheelHandler = async (evt: WheelEvent) => {
+			try {
+				if (!this.isModifierKeyHeld) return;
+
+				// Verify key is still held (handles Alt+Tab cases)
+				if (!this.isModifierKeyStillHeld(evt)) {
+					this.setModifierKeyState(false);
+					return;
+				}
+
+				const target = evt.target;
+				if (!(target instanceof HTMLImageElement)) return;
+
+				evt.preventDefault();
+				
+				// Use debounce instead of time comparison
+				this.debounce(async () => {
+					try {
+						await this.handleImageWheel(evt, target);
+					} catch (error) {
+						this.errorLog('Error handling wheel event:', error);
+						new Notice('Failed to resize image');
+					}
+				}, this.WHEEL_DEBOUNCE_MS);
+			} catch (error) {
+				this.errorLog('Error in wheel handler:', error);
+			}
+		};
+
+		// Register all event handlers
+		this.registerDomEvent(doc, "keydown", keydownHandler);
+		this.registerDomEvent(doc, "keyup", keyupHandler);
+		this.registerDomEvent(window, "blur", blurHandler);
+		doc.addEventListener("wheel", wheelHandler, { passive: false });
+
+		// Store the wheel event listener for cleanup
+		this.register(() => {
+			doc.removeEventListener("wheel", wheelHandler);
+		});
+	}
+
+	private isModifierKeyMatch(evt: KeyboardEvent): boolean {
+		const key = this.settings.wheelModifierKey.toLowerCase();
+		const eventKey = evt.key.toLowerCase();
+		
+		// Handle different key representations
+		switch (key) {
+			case 'alt':
+				return eventKey === 'alt' || eventKey === 'option';
+			case 'ctrl':
+				return eventKey === 'ctrl' || eventKey === 'control';
+			case 'shift':
+				return eventKey === 'shift';
+			default:
+				return false;
+		}
+	}
+
+	private isModifierKeyStillHeld(evt: WheelEvent): boolean {
+		switch (this.settings.wheelModifierKey.toLowerCase()) {
+			case 'alt': return evt.altKey;
+			case 'ctrl': return evt.ctrlKey;
+			case 'shift': return evt.shiftKey;
+			default: return false;
+		}
+	}
+
+	private async handleImageWheel(evt: WheelEvent, target: HTMLImageElement) {
+		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (!markdownView?.file) return;
+
+		const result = await this.getImageFileWithErrorHandling(target);
+		if (!result) return;
+
+		const { width } = await this.readImageDimensions(result.imgFile);
+		const currentScale = this.calculateImageScale(target, result.activeFile, result.imgFile, width);
+		
+		// Calculate new width
+		const currentWidth = currentScale === null ? width : Math.round((width * currentScale) / 100);
+		
+		// Calculate step size based on scroll speed
+		const stepSize = Math.max(
+			this.settings.wheelStepSize,
+			Math.abs(Math.round(evt.deltaY / 2))
+		);
+		
+		// Adjust width based on scroll direction
+		const scrollingUp = evt.deltaY < 0;
+		const shouldIncrease = this.settings.invertScrollDirection ? !scrollingUp : scrollingUp;
+		const newWidth = shouldIncrease
+			? currentWidth + stepSize
+			: Math.max(this.settings.wheelStepSize, currentWidth - stepSize);
+
+		// Only update if the width has actually changed
+		if (newWidth !== currentWidth) {
+			await this.updateImageLinkWidth(result.imgFile, newWidth);
+			this.debugLog(`Updated image size from ${currentWidth}px to ${newWidth}px`);
+		}
 	}
 
 	async loadSettings() {
