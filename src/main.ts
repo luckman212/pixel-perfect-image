@@ -24,12 +24,11 @@ export default class PixelPerfectImage extends Plugin {
 	/** Cache to store image dimensions to avoid repeated file reads */
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
-	private lastWheelTime = 0;
 	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private debounceTimer: number | null = null;
 	private wheelEventCleanup: (() => void) | null = null;
 
-	private debounce(func: Function, wait: number) {
+	private debounce<T extends (...args: any[]) => any>(func: T, wait: number): Promise<void> {
 		return new Promise<void>((resolve) => {
 			if (this.debounceTimer) {
 				window.clearTimeout(this.debounceTimer);
@@ -77,6 +76,12 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	private registerWheelEvents(currentWindow: Window) {
+		// If already registered previously, clean it up first
+		if (this.wheelEventCleanup) {
+			this.wheelEventCleanup();
+			this.wheelEventCleanup = null;
+		}
+
 		const doc = currentWindow.document;
 
 		// Handle modifier key press
@@ -634,6 +639,80 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
+	 * Updates image links in the text using a common transformation logic
+	 * @param text - The text to update
+	 * @param activeFile - The currently active file
+	 * @param imageFile - The image file to update links for
+	 * @param transform - Function to transform the parameters
+	 * @returns The updated text
+	 */
+	private updateLinks(text: string, activeFile: TFile, imageFile: TFile, transform: (params: string[]) => string[]): string {
+		// First handle wiki-style links
+		text = text.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
+			const { path, hash, params } = this.parseLinkComponents(linkInner);
+			
+			if (!this.resolveLink(path, activeFile, imageFile)) {
+				return _;
+			}
+
+			const newParams = transform(params);
+			const newLink = this.buildLinkPath(path, newParams, hash);
+			return `${opening}${newLink}${closing}`;
+		});
+
+		// Then handle markdown-style links
+		return text.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
+			const { path, hash, params } = this.parseLinkComponents(description, linkPath);
+			
+			if (!this.resolveLink(path, activeFile, imageFile)) {
+				return match;
+			}
+
+			const desc = description.split("|")[0].trim() || imageFile.basename;
+			const newParams = transform(params);
+			const newDescription = newParams.length > 0 ? [desc, ...newParams].join("|") : desc;
+			return `![${newDescription}](${this.buildLinkPath(path, [], hash)})`;
+		});
+	}
+
+	/**
+	 * Parses link components into path, hash, and parameters
+	 * @param mainPart - The main part of the link (either linkInner or description)
+	 * @param linkPath - Optional separate linkPath for markdown-style links
+	 * @returns Object containing parsed components
+	 */
+	private parseLinkComponents(mainPart: string, linkPath?: string): { path: string; hash: string; params: string[] } {
+		// For wiki-style links, everything is in mainPart
+		// For markdown-style links, path is in linkPath and params are in mainPart
+		const pathToParse = linkPath ?? mainPart;
+		
+		// Handle subpath components (e.g., #heading)
+		const [pathWithoutHash, hashPart] = pathToParse.split("#", 2);
+		const hash = hashPart ? `#${hashPart}` : "";
+
+		// Split parameters
+		const [path, ...params] = (linkPath ? mainPart : pathWithoutHash).split("|");
+
+		return {
+			path: linkPath ?? path,
+			hash,
+			params
+		};
+	}
+
+	/**
+	 * Builds a link path with optional parameters and hash
+	 * @param path - The base path
+	 * @param params - Array of parameters
+	 * @param hash - Hash component including #
+	 * @returns Constructed link path
+	 */
+	private buildLinkPath(path: string, params: string[], hash: string): string {
+		const paramsStr = params.length > 0 ? `|${params.join("|")}` : "";
+		return `${path}${paramsStr}${hash}`;
+	}
+
+	/**
 	 * Updates image links in the document using a transformation function.
 	 * @param imageFile - The image file being referenced
 	 * @param transform - Function that transforms the parameters of the image link
@@ -655,7 +734,6 @@ export default class PixelPerfectImage extends Plugin {
 
 		const editor = markdownView.editor;
 		const docText = editor.getValue();
-		let didChange = false;
 		
 		// Skip frontmatter if present
 		let contentWithoutFrontmatter = docText;
@@ -668,9 +746,8 @@ export default class PixelPerfectImage extends Plugin {
 			}
 		}
 		
-		// Handle both link types, but only in the content part
-		let replacedText = this.updateWikiLinks(contentWithoutFrontmatter, activeFile, imageFile, transform);
-		replacedText = this.updateMarkdownLinks(replacedText, activeFile, imageFile, transform);
+		// Handle both link types in one pass
+		const replacedText = this.updateLinks(contentWithoutFrontmatter, activeFile, imageFile, transform);
 
 		// Only update if content part changed
 		if (replacedText !== contentWithoutFrontmatter) {
@@ -678,14 +755,14 @@ export default class PixelPerfectImage extends Plugin {
 				// Combine frontmatter (if any) with updated content
 				const finalText = frontmatter + replacedText;
 				editor.setValue(finalText);
-				didChange = true;
+				return true;
 			} catch (error) {
 				this.errorLog('Failed to update editor content:', error);
 				throw new Error('Failed to update image link');
 			}
 		}
 
-		return didChange;
+		return false;
 	}
 
 	/**
@@ -700,75 +777,6 @@ export default class PixelPerfectImage extends Plugin {
 		if (!resolvedFile) return null;
 		if (imageFile && resolvedFile.path !== imageFile.path) return null;
 		return resolvedFile;
-	}
-
-	/**
-	 * Updates wiki-style image links in the text
-	 * @param text - The text to update
-	 * @param activeFile - The currently active file
-	 * @param imageFile - The image file to update links for
-	 * @param transform - Function to transform the parameters
-	 * @returns The updated text
-	 */
-	private updateWikiLinks(
-		text: string,
-		activeFile: TFile,
-		imageFile: TFile,
-		transform: (params: string[]) => string[]
-	): string {
-		return text.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
-			// Handle subpath components (e.g., #heading)
-			let [linkWithoutHash, hashPart] = linkInner.split("#", 2);
-			if (hashPart) hashPart = "#" + hashPart;
-
-			// Split link path and parameters
-			let [linkPath, ...pipeParams] = linkWithoutHash.split("|");
-
-			if (!this.resolveLink(linkPath, activeFile, imageFile)) {
-				return _;
-			}
-
-			// Transform parameters using the provided function
-			const newParams = transform(pipeParams);
-			const newLink = newParams.length > 0 ? [linkPath, ...newParams].join("|") : linkPath;
-			const updatedInner = hashPart ? `${newLink}${hashPart}` : newLink;
-
-			return `${opening}${updatedInner}${closing}`;
-		});
-	}
-
-	/**
-	 * Updates markdown-style image links in the text
-	 * @param text - The text to update
-	 * @param activeFile - The currently active file
-	 * @param imageFile - The image file to update links for
-	 * @param transform - Function to transform the parameters
-	 * @returns The updated text
-	 */
-	private updateMarkdownLinks(
-		text: string,
-		activeFile: TFile,
-		imageFile: TFile,
-		transform: (params: string[]) => string[]
-	): string {
-		return text.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
-			// Split description and parameters
-			let [desc, ...pipeParams] = description.split("|");
-			
-			if (!this.resolveLink(linkPath, activeFile, imageFile)) {
-				return match;
-			}
-
-			// If there's no description, use the filename without extension
-			if (!desc) {
-				desc = imageFile.basename;
-			}
-
-			// Transform parameters using the provided function
-			const newParams = transform(pipeParams);
-			const newDescription = newParams.length > 0 ? [desc, ...newParams].join("|") : desc;
-			return `![${newDescription}](${linkPath})`;
-		});
 	}
 
 	/**
