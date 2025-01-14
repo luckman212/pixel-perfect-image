@@ -1,10 +1,9 @@
-import { Menu, MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
 import { isMacPlatform } from './utils/platform';
 
-// Used for "Show in Finder"
 declare module 'obsidian' {
 	interface App {
 		showInFolder(path: string): void;
@@ -25,21 +24,7 @@ export default class PixelPerfectImage extends Plugin {
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
 	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
-	private debounceTimer: number | null = null;
 	private wheelEventCleanup: (() => void) | null = null;
-
-	private debounce<T extends (...args: any[]) => any>(func: T, wait: number): Promise<void> {
-		return new Promise<void>((resolve) => {
-			if (this.debounceTimer) {
-				window.clearTimeout(this.debounceTimer);
-			}
-			this.debounceTimer = window.setTimeout(() => {
-				func();
-				this.debounceTimer = null;
-				resolve();
-			}, wait);
-		});
-	}
 
 	async onload() {
 		await this.loadSettings();
@@ -56,11 +41,6 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	onunload() {
-		// Clear any pending debounce timer
-		if (this.debounceTimer) {
-			window.clearTimeout(this.debounceTimer);
-			this.debounceTimer = null;
-		}
 		// Reset state
 		this.isModifierKeyHeld = false;
 		this.dimensionCache.clear();
@@ -68,10 +48,6 @@ export default class PixelPerfectImage extends Plugin {
 
 	private setModifierKeyState(isHeld: boolean) {
 		this.isModifierKeyHeld = isHeld;
-		if (!isHeld && this.debounceTimer) {
-			window.clearTimeout(this.debounceTimer);
-			this.debounceTimer = null;
-		}
 		this.debugLog(`Modifier key ${isHeld ? 'pressed' : 'released'}`);
 	}
 
@@ -106,7 +82,7 @@ export default class PixelPerfectImage extends Plugin {
 		};
 
 		// Create bound event handler for cleanup
-		const wheelHandler = async (evt: WheelEvent) => {
+		const wheelHandler = debounce(async (evt: WheelEvent) => {
 			try {
 				// If zoom is not enabled or modifier not held, let default scroll happen
 				if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
@@ -123,19 +99,16 @@ export default class PixelPerfectImage extends Plugin {
 				// Only prevent default if we're actually going to handle the zoom
 				evt.preventDefault();
 				
-				// Debounce and execute the wheel handler
-				await this.debounce(async () => {
-					try {
-							await this.handleImageWheel(evt, target);
-					} catch (error) {
-						this.errorLog('Error handling wheel event:', error);
-						new Notice('Failed to resize image');
-					}
-				}, this.WHEEL_DEBOUNCE_MS);
+				try {
+					await this.handleImageWheel(evt, target);
+				} catch (error) {
+					this.errorLog('Error handling wheel event:', error);
+					new Notice('Failed to resize image');
+				}
 			} catch (error) {
 				this.errorLog('Error in wheel handler:', error);
 			}
-		};
+		}, this.WHEEL_DEBOUNCE_MS, true);  // true = leading edge
 
 		// Register all event handlers with non-passive wheel listener
 		this.registerDomEvent(doc, "keydown", keydownHandler);
