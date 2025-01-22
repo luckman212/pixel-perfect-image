@@ -196,26 +196,34 @@ export default class PixelPerfectImage extends Plugin {
 	 */
 	private registerImageContextMenu(): void {
 		this.registerDomEvent(document, 'contextmenu', async (ev: MouseEvent) => {
-			const target = ev.target;
-			if (!(target instanceof HTMLImageElement)) {
-				return;
-			}
+			const img = this.findImageElement(ev.target);
+			if (!img) return;
 
 			// Prevent default context menu to show our custom one
 			ev.preventDefault();
 
 			const menu = new Menu();
-			await this.addDimensionsMenuItem(menu, target);
+			await this.addDimensionsMenuItem(menu, img);
 			await this.addResizeMenuItems(menu, ev);
 			
 			// Add separator before file operations
 			menu.addSeparator();
 			
 			// Add file operation items
-			this.addFileOperationMenuItems(menu, target);
+			this.addFileOperationMenuItems(menu, img);
 
 			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
 		});
+	}
+
+	/**
+	 * Helper to find an image element from an event target
+	 * @param target - The event target or HTML element
+	 * @returns The found image element or null
+	 */
+	private findImageElement(target: EventTarget | null): HTMLImageElement | null {
+		if (!target || !(target instanceof HTMLElement)) return null;
+		return target instanceof HTMLImageElement ? target : target.querySelector('img');
 	}
 
 	/**
@@ -405,13 +413,16 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param ev - The original mouse event
 	 */
 	private async addResizeMenuItems(menu: Menu, ev: MouseEvent): Promise<void> {
+		const img = this.findImageElement(ev.target);
+		if (!img) return;
+
 		// Add copy to clipboard option first
 		this.addMenuItem(
 			menu,
 			'Copy Image',
 			'copy',
 			async () => {
-				await this.copyImageToClipboard(ev.target as HTMLImageElement);
+				await this.copyImageToClipboard(img);
 				new Notice('Image copied to clipboard');
 			},
 			'Failed to copy image to clipboard'
@@ -423,7 +434,6 @@ export default class PixelPerfectImage extends Plugin {
 			'Copy Local Path',
 			'link',
 			async () => {
-				const img = ev.target as HTMLImageElement;
 				const result = await this.getImageFileWithErrorHandling(img);
 				if (!result) return;
 				
@@ -446,7 +456,6 @@ export default class PixelPerfectImage extends Plugin {
 		menu.addSeparator();
 
 		// Get current scale and file info
-		const img = ev.target as HTMLImageElement;
 		const result = await this.getImageFileWithErrorHandling(img);
 		let currentScale: number | null = null;
 		
