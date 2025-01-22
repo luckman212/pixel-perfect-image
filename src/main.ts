@@ -81,25 +81,25 @@ export default class PixelPerfectImage extends Plugin {
 		};
 
 		// Create bound event handler for cleanup
-		const wheelHandler = debounce(async (evt: WheelEvent) => {
+		const wheelHandler = debounce(async (ev: WheelEvent) => {
 			try {
 				// If zoom is not enabled or modifier not held, let default scroll happen
 				if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
 
 				// Verify key is still held (handles Alt+Tab cases)
-				if (!this.isModifierKeyStillHeld(evt)) {
+				if (!this.isModifierKeyStillHeld(ev)) {
 					this.setModifierKeyState(false);
 					return;
 				}
 
-				const target = evt.target;
-				if (!(target instanceof HTMLImageElement)) return;
+				const img = this.findImageElement(ev.target);
+				if (!img) return;
 
 				// Only prevent default if we're actually going to handle the zoom
-				evt.preventDefault();
+				ev.preventDefault();
 				
 				try {
-					await this.handleImageWheel(evt, target);
+					await this.handleImageWheel(ev, img);
 				} catch (error) {
 					this.errorLog('Error handling wheel event:', error);
 					new Notice('Failed to resize image');
@@ -548,7 +548,11 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param percentage - Percentage to resize the image to
 	 */
 	private async resizeImage(ev: MouseEvent, percentage: number) {
-		const img = ev.target as HTMLImageElement;
+		const img = this.findImageElement(ev.target);
+		if (!img) {
+			throw new Error("Could not find the image element");
+		}
+
 		const result = await this.getImageFileWithErrorHandling(img);
 		if (!result) {
 			throw new Error("Could not find the image file");
