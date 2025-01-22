@@ -1,6 +1,6 @@
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import { App, PluginSettingTab, Setting, Platform } from 'obsidian';
 import PixelPerfectImage from './main';
-import { isMacPlatform } from './utils/platform';
+
 
 export interface PixelPerfectImageSettings {
 	debugMode: boolean;
@@ -73,7 +73,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			.setName("Modifier Key")
 			.setDesc("Key to hold while using mousewheel to zoom.")
 			.addDropdown(dropdown => {
-				const isMac = isMacPlatform();
+				const isMac = Platform.isMacOS;
 				dropdown
 					.addOption('Alt', isMac ? 'Option' : 'Alt')
 					.addOption('Ctrl', 'Ctrl')
@@ -146,7 +146,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			.setName("External Editor Path")
 			.setDesc("Full path to the external editor application/executable.")
 			.addText(text => {
-				const placeholder = isMacPlatform()
+				const placeholder = Platform.isMacOS
 					? "/Applications/Adobe Photoshop 2025/Adobe Photoshop 2025.app"
 					: "C:\\Program Files\\Adobe\\Adobe Photoshop 2025\\Photoshop.exe";
 				text
