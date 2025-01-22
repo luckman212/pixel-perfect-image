@@ -1,8 +1,7 @@
-import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
-import { isMacPlatform } from './utils/platform';
 
 declare module 'obsidian' {
 	interface App {
@@ -487,7 +486,7 @@ export default class PixelPerfectImage extends Plugin {
 	 * Adds file operation menu items like Show in Finder/Explorer and Open in Default App
 	 */
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
-		const isMac = isMacPlatform();
+		const isMac = Platform.isMacOS;
 
 		// Add show in system explorer option
 		this.addMenuItem(
@@ -705,15 +704,16 @@ export default class PixelPerfectImage extends Plugin {
 			throw new Error('No active MarkdownView to update.');
 		}
 
-		const editor = markdownView.editor;
-		const docText = editor.getValue();
+		const docText = await this.app.vault.read(activeFile);
 		
 		// Skip frontmatter if present
 		let contentWithoutFrontmatter = docText;
 		let frontmatter = '';
+		let hasFrontmatter = false;
 		if (docText.startsWith('---\n')) {
 			const frontmatterEnd = docText.indexOf('\n---\n', 4);
 			if (frontmatterEnd !== -1) {
+				hasFrontmatter = true;
 				frontmatter = docText.substring(0, frontmatterEnd + 5);
 				contentWithoutFrontmatter = docText.substring(frontmatterEnd + 5);
 			}
@@ -725,12 +725,21 @@ export default class PixelPerfectImage extends Plugin {
 		// Only update if content part changed
 		if (replacedText !== contentWithoutFrontmatter) {
 			try {
-				// Combine frontmatter (if any) with updated content
-				const finalText = frontmatter + replacedText;
-				editor.setValue(finalText);
+				// Update the file content using vault.process
+				await this.app.vault.process(activeFile, (data) => {
+					if (hasFrontmatter) {
+						// If there's frontmatter, only replace the content part
+						const frontmatterEnd = data.indexOf('\n---\n', 4);
+						if (frontmatterEnd !== -1) {
+							return data.substring(0, frontmatterEnd + 5) + replacedText;
+						}
+					}
+					// If no frontmatter or something went wrong, replace entire content
+					return hasFrontmatter ? frontmatter + replacedText : replacedText;
+				});
 				return true;
 			} catch (error) {
-				this.errorLog('Failed to update editor content:', error);
+				this.errorLog('Failed to update file content:', error);
 				throw new Error('Failed to update image link');
 			}
 		}
@@ -914,7 +923,7 @@ export default class PixelPerfectImage extends Plugin {
 
 		// 3. Choose command depending on macOS vs Windows
 		let cmd: string;
-		if (isMacPlatform()) {
+		if (Platform.isMacOS) {
 			// On macOS, use `open -a "/Applications/Editor.app" "/path/to/file.png"`
 			cmd = `open -a "${editorPath}" "${absoluteFilePath}"`;
 		} else {
