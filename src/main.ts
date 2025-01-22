@@ -706,16 +706,15 @@ export default class PixelPerfectImage extends Plugin {
 
 		const docText = await this.app.vault.read(activeFile);
 		
-		// Skip frontmatter if present
+		// Extract frontmatter and content
 		let contentWithoutFrontmatter = docText;
-		let frontmatter = '';
-		let hasFrontmatter = false;
+		let frontmatterEndIndex = -1;
+		
 		if (docText.startsWith('---\n')) {
-			const frontmatterEnd = docText.indexOf('\n---\n', 4);
-			if (frontmatterEnd !== -1) {
-				hasFrontmatter = true;
-				frontmatter = docText.substring(0, frontmatterEnd + 5);
-				contentWithoutFrontmatter = docText.substring(frontmatterEnd + 5);
+			frontmatterEndIndex = docText.indexOf('\n---\n', 4);
+			if (frontmatterEndIndex !== -1) {
+				frontmatterEndIndex += 5; // Include the closing delimiter
+				contentWithoutFrontmatter = docText.substring(frontmatterEndIndex);
 			}
 		}
 		
@@ -727,15 +726,9 @@ export default class PixelPerfectImage extends Plugin {
 			try {
 				// Update the file content using vault.process
 				await this.app.vault.process(activeFile, (data) => {
-					if (hasFrontmatter) {
-						// If there's frontmatter, only replace the content part
-						const frontmatterEnd = data.indexOf('\n---\n', 4);
-						if (frontmatterEnd !== -1) {
-							return data.substring(0, frontmatterEnd + 5) + replacedText;
-						}
-					}
-					// If no frontmatter or something went wrong, replace entire content
-					return hasFrontmatter ? frontmatter + replacedText : replacedText;
+					return frontmatterEndIndex !== -1
+						? data.substring(0, frontmatterEndIndex) + replacedText
+						: replacedText;
 				});
 				return true;
 			} catch (error) {
