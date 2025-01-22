@@ -1,4 +1,4 @@
-import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform } from 'obsidian';
+import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
@@ -910,7 +910,12 @@ export default class PixelPerfectImage extends Plugin {
 		}
 
 		// 1. Get absolute path to the vault root
-		const vaultPath = (this.app.vault.adapter as any).basePath;
+		const adapter = this.app.vault.adapter;
+		if (!(adapter instanceof FileSystemAdapter)) {
+			new Notice('Cannot open file: Vault is not a FileSystemAdapter');
+			return;
+		}
+		const vaultPath = adapter.getBasePath();
 		// 2. Combine vault root with the relative Obsidian path
 		const absoluteFilePath = join(vaultPath, normalizePath(filePath));
 
