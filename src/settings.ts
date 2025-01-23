@@ -36,14 +36,13 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		this.plugin = plugin;
 	}
 
-	display(): void {
+	async display() {
 		const { containerEl } = this;
-
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName("Show File Information")
-			.setDesc("Show file name and dimensions in the context menu.")
+			.setName("Show file information")
+			.setDesc("Show file information in the context menu")
 			.addToggle(toggle => {
 				toggle
 					.setValue(this.plugin.settings.showFileInfo)
@@ -54,12 +53,13 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Mousewheel Zoom')
+			.setName("Mousewheel zoom")
+			.setDesc("Settings for zooming images with mousewheel")
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName("Enable Mousewheel Zoom")
-			.setDesc("Hold modifier key and use mousewheel to resize images.")
+			.setName("Enable mousewheel zoom")
+			.setDesc("Hold modifier key and scroll to resize images")
 			.addToggle(toggle => {
 				toggle
 					.setValue(this.plugin.settings.enableWheelZoom)
@@ -70,8 +70,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Modifier Key")
-			.setDesc("Key to hold while using mousewheel to zoom.")
+			.setName("Modifier key")
+			.setDesc("Key to hold while scrolling to zoom images")
 			.addDropdown(dropdown => {
 				const isMac = Platform.isMacOS;
 				dropdown
@@ -86,24 +86,22 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Zoom Step Size")
-			.setDesc("Percentage of current width to zoom per scroll step.")
-			.addText(text => {
-				text
-					.setPlaceholder("20")
-					.setValue(this.plugin.settings.wheelZoomPercentage.toString())
+			.setName("Zoom step size")
+			.setDesc("Percentage to zoom per scroll step")
+			.addSlider(slider => {
+				slider
+					.setValue(this.plugin.settings.wheelZoomPercentage)
 					.onChange(async (value) => {
-						const numValue = parseInt(value);
-						if (!isNaN(numValue) && numValue > 0) {
-							this.plugin.settings.wheelZoomPercentage = numValue;
+						if (!isNaN(value) && value > 0) {
+							this.plugin.settings.wheelZoomPercentage = value;
 							await this.plugin.saveSettings();
 						}
 					});
 			});
 
 		new Setting(containerEl)
-			.setName("Invert Scroll Direction")
-			.setDesc("Invert the direction of mousewheel zooming.")
+			.setName("Invert scroll direction")
+			.setDesc("Invert the zoom direction when scrolling")
 			.addToggle(toggle => {
 				toggle
 					.setValue(this.plugin.settings.invertScrollDirection)
@@ -114,12 +112,13 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-		.setName('External Editor')
-		.setHeading()
+			.setName("External editor")
+			.setDesc("Settings for external image editor integration")
+			.setHeading();
 
 		new Setting(containerEl)
-			.setName("Show Menu Option \"Edit in External Editor\"")
-			.setDesc("Show the option to edit images in external editor in the context menu.")
+			.setName('Show menu option "Edit in external editor"')
+			.setDesc("Add option to context menu to edit images in external editor")
 			.addToggle(toggle => {
 				toggle
 					.setValue(this.plugin.settings.showExternalEditor)
@@ -130,8 +129,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("External Editor Name")
-			.setDesc("Name of the external editor (e.g., Photoshop, Affinity Photo, etc.)")
+			.setName("External editor name")
+			.setDesc("Name of your external editor (e.g., Photoshop)")
 			.addText(text => {
 				text
 					.setPlaceholder("Photoshop")
@@ -143,8 +142,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("External Editor Path")
-			.setDesc("Full path to the external editor application/executable.")
+			.setName("External editor path")
+			.setDesc("Full path to your external editor application")
 			.addText(text => {
 				const placeholder = Platform.isMacOS
 					? "/Applications/Adobe Photoshop 2025/Adobe Photoshop 2025.app"
@@ -160,12 +159,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-		.setName('Developer')
-		.setHeading()
-
-		new Setting(containerEl)
-			.setName("Debug Mode")
-			.setDesc("Enable debug mode to log information to the console.")
+			.setName("Debug mode")
+			.setDesc("Enable debug logging to console")
 			.addToggle(toggle => {
 				toggle
 					.setValue(this.plugin.settings.debugMode)
@@ -174,7 +169,5 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 						await this.plugin.saveSettings();
 					});
 			});
-
 	}
-	
 } 
