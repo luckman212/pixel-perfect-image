@@ -1,5 +1,5 @@
 import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter } from 'obsidian';
-import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab } from './settings';
+import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab, getExternalEditorPath } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
 
@@ -521,7 +521,7 @@ export default class PixelPerfectImage extends Plugin {
 		this.addMenuItem(
 			menu,
 			'Open in default app',
-			'open-elsewhere',
+			'image',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
 				if (!result) return;
@@ -530,13 +530,14 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to open in default app'
 		);
 
-		// Add external editor option if enabled
-		if (this.settings.showExternalEditor) {
+		// Add external editor option if path is set
+		const editorPath = getExternalEditorPath(this.settings);
+		if (editorPath?.trim()) {
 			const editorName = this.settings.externalEditorName.trim() || "External Editor";
 			this.addMenuItem(
 				menu,
 				`Open in ${editorName}`,
-				'open-elsewhere',
+				'edit',
 				async () => {
 					const result = await this.getImageFileWithErrorHandling(target);
 					if (!result) return;
@@ -977,7 +978,7 @@ export default class PixelPerfectImage extends Plugin {
 
 	// --- Add a helper function to launch external editor
 	private openInExternalEditor(filePath: string) {
-		const editorPath = this.settings.externalEditorPath;
+		const editorPath = getExternalEditorPath(this.settings);
 		const editorName = this.settings.externalEditorName.trim() || "External Editor";
 		if (!editorPath) {
 			new Notice(`Please set your ${editorName} path in Pixel Perfect Image settings.`);

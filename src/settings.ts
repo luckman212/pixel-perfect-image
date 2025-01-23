@@ -5,9 +5,9 @@ import PixelPerfectImage from './main';
 export interface PixelPerfectImageSettings {
 	debugMode: boolean;
 	showFileInfo: boolean;
-	showExternalEditor: boolean;
 	externalEditorName: string;
-	externalEditorPath: string;
+	externalEditorPathMac: string;
+	externalEditorPathWin: string;
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
 	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
@@ -18,15 +18,20 @@ export interface PixelPerfectImageSettings {
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	debugMode: false,
 	showFileInfo: true,
-	showExternalEditor: true,
 	externalEditorName: "",
-	externalEditorPath: "",
+	externalEditorPathMac: "",
+	externalEditorPathWin: "",
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
 	wheelModifierKey: 'Alt',
 	wheelZoomPercentage: 20,
 	invertScrollDirection: false
 };
+
+// Add helper function to get the correct path based on platform
+export function getExternalEditorPath(settings: PixelPerfectImageSettings): string {
+	return Platform.isMacOS ? settings.externalEditorPathMac : settings.externalEditorPathWin;
+}
 
 export class PixelPerfectImageSettingTab extends PluginSettingTab {
 	plugin: PixelPerfectImage;
@@ -117,18 +122,6 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			.setHeading();
 
 		new Setting(containerEl)
-			.setName('Show menu option "Edit in external editor"')
-			.setDesc("Add option to context menu to edit images in external editor")
-			.addToggle(toggle => {
-				toggle
-					.setValue(this.plugin.settings.showExternalEditor)
-					.onChange(async (value: boolean) => {
-						this.plugin.settings.showExternalEditor = value;
-						await this.plugin.saveSettings();
-					});
-			});
-
-		new Setting(containerEl)
 			.setName("External editor name")
 			.setDesc("Name of your external editor (e.g., Photoshop)")
 			.addText(text => {
@@ -141,22 +134,37 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 					});
 			});
 
-		new Setting(containerEl)
-			.setName("External editor path")
-			.setDesc("Full path to your external editor application")
-			.addText(text => {
-				const placeholder = Platform.isMacOS
-					? "/Applications/Adobe Photoshop 2025/Adobe Photoshop 2025.app"
-					: "C:\\Program Files\\Adobe\\Adobe Photoshop 2025\\Photoshop.exe";
-				text
-					.setPlaceholder(placeholder)
-					.setValue(this.plugin.settings.externalEditorPath)
-					.onChange(async (value) => {
-						const cleanedPath = value.replace(/\\ /g, ' ');
-						this.plugin.settings.externalEditorPath = cleanedPath;
-						await this.plugin.saveSettings();
-					});
-			});
+		if (Platform.isMacOS) {
+			new Setting(containerEl)
+				.setName("External editor path (MacOS)")
+				.setDesc("Full path to your external editor application on MacOS")
+				.addText(text => {
+					text
+						.setPlaceholder("/Applications/Adobe Photoshop 2025/Adobe Photoshop 2025.app")
+						.setValue(this.plugin.settings.externalEditorPathMac)
+						.onChange(async (value) => {
+							const cleanedPath = value.replace(/\\ /g, ' ');
+							this.plugin.settings.externalEditorPathMac = cleanedPath;
+							await this.plugin.saveSettings();
+						});
+				});
+		}
+
+		if (Platform.isWin) {
+			new Setting(containerEl)
+				.setName("External editor path (Windows)")
+				.setDesc("Full path to your external editor application on Windows")
+				.addText(text => {
+					text
+						.setPlaceholder("C:\\Program Files\\Adobe\\Adobe Photoshop 2025\\Photoshop.exe")
+						.setValue(this.plugin.settings.externalEditorPathWin)
+						.onChange(async (value) => {
+							const cleanedPath = value.replace(/\\ /g, ' ');
+							this.plugin.settings.externalEditorPathWin = cleanedPath;
+							await this.plugin.saveSettings();
+						});
+				});
+		}
 
 		new Setting(containerEl)
 			.setName("Debug mode")
