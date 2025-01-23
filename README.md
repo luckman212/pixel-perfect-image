@@ -60,6 +60,18 @@ After resizing to 50%:
 
 ![Settings](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot2.png?raw=true)
 
+## Known Issues
+
+### Windows and Minimal Theme
+
+When using Pixel Perfect Image on Windows PCs with the Minimal theme, the built-in image zoom can interfere with the right-click menu. To resolve this:
+
+1. Install the Style Settings plugin
+2. Go to Style Settings > Minimal > Images
+3. Enable the "Disable image zoom" option
+
+This will ensure the best experience with Pixel Perfect Image's right click menu.
+
 ## Support
 
 If you have any questions, suggestions, or issues, please open an issue on the [GitHub repository](https://github.com/johansan/pixel-perfect-image).
