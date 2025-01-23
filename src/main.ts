@@ -17,6 +17,13 @@ const WIKILINK_IMAGE_REGEX = /(!\[\[)([^\]]+)(\]\])/g;
 /** Regular expressions to match both image link styles */
 const MARKDOWN_IMAGE_REGEX = /!\[([^\]]*)\]\(([^)]+)\)/g;
 
+interface ImageLink {
+	path: string;
+	hash: string;
+	params: string[];
+	isWikiStyle: boolean;
+}
+
 export default class PixelPerfectImage extends Plugin {
 	settings: PixelPerfectImageSettings;
 	/** Cache to store image dimensions to avoid repeated file reads */
@@ -624,77 +631,132 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	/**
-	 * Updates image links in the text using a common transformation logic
-	 * @param text - The text to update
-	 * @param activeFile - The currently active file
-	 * @param imageFile - The image file to update links for
-	 * @param transform - Function to transform the parameters
-	 * @returns The updated text
+	 * Updates image links in the text using a common transformation logic.
+	 * Handles both wiki-style (![[image.png|100]]) and markdown-style (![alt|100](image.png)) links.
+	 * 
+	 * Examples of transformations:
+	 * - Input text: "Here's an image: ![[photo.jpg|50]]"
+	 *   Transform: (params) => ["100"]
+	 *   Output: "Here's an image: ![[photo.jpg|100]]"
+	 * 
+	 * - Input text: "Another image: ![caption|50](photo.jpg)"
+	 *   Transform: (params) => ["100"]
+	 *   Output: "Another image: ![caption|100](photo.jpg)"
+	 * 
+	 * @param text - The markdown text to update
+	 * @param activeFile - The currently active file (for resolving relative paths)
+	 * @param imageFile - The specific image file to update links for
+	 * @param transform - Function that takes current parameters and returns new ones
+	 * @returns The text with updated image links
 	 */
 	private updateLinks(text: string, activeFile: TFile, imageFile: TFile, transform: (params: string[]) => string[]): string {
-		// First handle wiki-style links
+		// Handle wiki-style links (![[image.png|100]])
 		text = text.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
-			const { path, hash, params } = this.parseLinkComponents(linkInner);
+			// Parse the link components (path, hash, params)
+			const link = this.parseLinkComponents(linkInner);
 			
-			if (!this.resolveLink(path, activeFile, imageFile)) {
-				return _;
+			// Skip if this link doesn't point to our target image
+			if (!this.resolveLink(link.path, activeFile, imageFile)) {
+				return _;  // Return original match unchanged
 			}
 
-			const newParams = transform(params);
-			const newLink = this.buildLinkPath(path, newParams, hash);
-			return `${opening}${newLink}${closing}`;
+			// Transform the parameters (e.g., change width)
+			link.params = transform(link.params);
+			// Rebuild the link with new parameters
+			const newLink = this.buildLinkPath(link);
+			return `${opening}${newLink}${closing}`;  // Reconstruct full wikilink
 		});
 
-		// Then handle markdown-style links
+		// Handle markdown-style links (![alt|100](image.png))
 		return text.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
-			const { path, hash, params } = this.parseLinkComponents(description, linkPath);
+			// Parse the link components from both parts
+			const link = this.parseLinkComponents(description, linkPath);
 			
-			if (!this.resolveLink(path, activeFile, imageFile)) {
-				return match;
+			// Skip if this link doesn't point to our target image
+			if (!this.resolveLink(link.path, activeFile, imageFile)) {
+				return match;  // Return original match unchanged
 			}
 
+			// Get the base description without parameters
 			const desc = description.split("|")[0].trim() || imageFile.basename;
-			const newParams = transform(params);
-			const newDescription = newParams.length > 0 ? [desc, ...newParams].join("|") : desc;
-			return `![${newDescription}](${this.buildLinkPath(path, [], hash)})`;
+			// Transform the parameters
+			link.params = transform(link.params);
+			// Combine description with new parameters
+			const newDescription = link.params.length > 0 ? [desc, ...link.params].join("|") : desc;
+			// For markdown links, we put parameters in the description and keep the URL clean
+			return `![${newDescription}](${this.buildLinkPath({...link, params: []})})`;
 		});
 	}
 
 	/**
-	 * Parses link components into path, hash, and parameters
-	 * @param mainPart - The main part of the link (either linkInner or description)
-	 * @param linkPath - Optional separate linkPath for markdown-style links
-	 * @returns Object containing parsed components
+	 * Parses an Obsidian image link into its components.
+	 * Handles both wiki-style (![[image.png|100]]) and markdown-style (![alt|100](image.png)) links.
+	 * 
+	 * For wiki-style links (![[image.png|100#heading]]):
+	 * - mainPart = "image.png|100#heading"
+	 * - linkPath = undefined
+	 * 
+	 * For markdown-style links (![alt|100](image.png#heading)):
+	 * - mainPart = "alt|100" (the part between [] brackets)
+	 * - linkPath = "image.png#heading" (the part between () parentheses)
+	 * 
+	 * @param mainPart - For wiki links: full link content. For markdown links: the alt/description text
+	 * @param linkPath - Only used for markdown links: the URL/path part in parentheses
+	 * @returns Parsed components of the link:
+	 *   - path: The file path without parameters or hash
+	 *   - hash: The heading reference (e.g., "#heading") if any
+	 *   - params: Array of parameters (e.g., ["100"] for width)
+	 *   - isWikiStyle: Whether this is a wiki-style (![[...]]) or markdown-style link
 	 */
-	private parseLinkComponents(mainPart: string, linkPath?: string): { path: string; hash: string; params: string[] } {
-		// For wiki-style links, everything is in mainPart
-		// For markdown-style links, path is in linkPath and params are in mainPart
+	private parseLinkComponents(mainPart: string, linkPath?: string): ImageLink {
+		// For markdown links, pathToParse is the URL in parentheses
+		// For wiki links, pathToParse is the entire link content
 		const pathToParse = linkPath ?? mainPart;
-		
-		// Handle subpath components (e.g., #heading)
+
+		// Split off any heading reference (#) from the path
+		// e.g., "image.png#heading" → ["image.png", "heading"]
 		const [pathWithoutHash, hashPart] = pathToParse.split("#", 2);
 		const hash = hashPart ? `#${hashPart}` : "";
 
-		// Split parameters
+		// For markdown links: split the alt text to get parameters
+		// For wiki links: split the path to get parameters
+		// e.g., "alt|100" → ["alt", "100"]
+		// e.g., "image.png|100" → ["image.png", "100"]
 		const [path, ...params] = (linkPath ? mainPart : pathWithoutHash).split("|");
-
+		
 		return {
-			path: linkPath ?? path,
-			hash,
-			params
+			path: linkPath ?? path,  // For markdown links, use the URL part; for wiki links, use the path part
+			hash,                    // Any heading reference (#) found
+			params,                  // Array of parameters (e.g., width)
+			isWikiStyle: !linkPath   // If linkPath is undefined, it's a wiki-style link
 		};
 	}
 
 	/**
-	 * Builds a link path with optional parameters and hash
-	 * @param path - The base path
-	 * @param params - Array of parameters
-	 * @param hash - Hash component including #
-	 * @returns Constructed link path
+	 * Builds a link path by combining the components of an ImageLink.
+	 * Used to reconstruct both wiki-style and markdown-style image links.
+	 * 
+	 * Examples:
+	 * - Input: { path: "image.png", params: ["100"], hash: "#heading" }
+	 *   Output: "image.png|100#heading"
+	 * 
+	 * - Input: { path: "image.png", params: [], hash: "" }
+	 *   Output: "image.png"
+	 * 
+	 * - Input: { path: "subfolder/image.png", params: ["200", "left"], hash: "#section" }
+	 *   Output: "subfolder/image.png|200|left#section"
+	 * 
+	 * @param link - The ImageLink object containing path, parameters, and hash
+	 * @returns The reconstructed link path with parameters and hash (if any)
 	 */
-	private buildLinkPath(path: string, params: string[], hash: string): string {
-		const paramsStr = params.length > 0 ? `|${params.join("|")}` : "";
-		return `${path}${paramsStr}${hash}`;
+	private buildLinkPath(link: ImageLink): string {
+		// Join parameters with | if there are any
+		// e.g., params ["100", "left"] becomes "|100|left"
+		const paramsStr = link.params.length > 0 ? `|${link.params.join("|")}` : "";
+
+		// Combine path + parameters + hash
+		// e.g., "image.png" + "|100|left" + "#heading"
+		return `${link.path}${paramsStr}${link.hash}`;
 	}
 
 	/**
