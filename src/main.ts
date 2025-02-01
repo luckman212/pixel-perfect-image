@@ -768,15 +768,16 @@ export default class PixelPerfectImage extends Plugin {
 	 * Updates image links in the document using a transformation function.
 	 * @param imageFile - The image file being referenced
 	 * @param transform - Function that transforms the parameters of the image link
+	 * @returns Promise<boolean> - True if any changes were made, false otherwise
 	 */
-	private async updateImageLinks(imageFile: TFile, transform: (params: string[]) => string[]) {
+	private async updateImageLinks(imageFile: TFile, transform: (params: string[]) => string[]): Promise<boolean> {
 		const activeFile = this.app.workspace.getActiveFile();
 		if (!activeFile) {
 			throw new Error('No active file, cannot update link.');
 		}
 
 		if (activeFile.path === imageFile.path) {
-			return;
+			return false;
 		}
 
 		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
