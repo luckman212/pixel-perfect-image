@@ -313,8 +313,10 @@ export default class PixelPerfectImage extends Plugin {
 			return isNaN(width) ? null : width;
 		};
 
-		// Check wiki-style links
-		docText.replace(WIKILINK_IMAGE_REGEX, (_, opening, linkInner, closing) => {
+		// Check wiki-style links using matchAll
+		for (const match of docText.matchAll(WIKILINK_IMAGE_REGEX)) {
+			const [_, _opening, linkInner] = match;
+			
 			// Handle subpath components (e.g., #heading)
 			let [linkWithoutHash] = linkInner.split("#", 1);
 
@@ -326,14 +328,16 @@ export default class PixelPerfectImage extends Plugin {
 				const width = parseWidth(pipeParams);
 				if (width !== null) {
 					customWidth = width;
+					break;  // Found the width, no need to continue
 				}
 			}
-			return _;
-		});
+		}
 
 		// If not found in wiki links, check Markdown-style links
 		if (customWidth === null) {
-			docText.replace(MARKDOWN_IMAGE_REGEX, (match, description, linkPath) => {
+			for (const match of docText.matchAll(MARKDOWN_IMAGE_REGEX)) {
+				const [_, description, linkPath] = match;
+				
 				// Split description and parameters
 				let [desc, ...pipeParams] = description.split("|");
 				
@@ -342,10 +346,10 @@ export default class PixelPerfectImage extends Plugin {
 					const width = parseWidth(pipeParams);
 					if (width !== null) {
 						customWidth = width;
+						break;  // Found the width, no need to continue
 					}
 				}
-				return match;
-			});
+			}
 		}
 
 		return customWidth;
