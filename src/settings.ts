@@ -3,29 +3,47 @@ import PixelPerfectImage from './main';
 
 
 export interface PixelPerfectImageSettings {
-	debugMode: boolean;
+	// File information settings
 	showFileInfo: boolean;
-	externalEditorName: string;
-	externalEditorPathMac: string;
-	externalEditorPathWin: string;
+
+	// Resize options
+	customResizeWidth: number;  // in pixels (0 means disabled)
+
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
 	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
 	wheelZoomPercentage: number;
 	invertScrollDirection: boolean;
+
+	// External editor settings
+	externalEditorName: string;
+	externalEditorPathMac: string;
+	externalEditorPathWin: string;
+
+	// Debug settings
+	debugMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
-	debugMode: false,
+	// File information defaults
 	showFileInfo: true,
-	externalEditorName: "",
-	externalEditorPathMac: "",
-	externalEditorPathWin: "",
+
+	// Resize options defaults
+	customResizeWidth: 0,  // disabled by default
+
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
 	wheelModifierKey: 'Alt',
 	wheelZoomPercentage: 20,
-	invertScrollDirection: false
+	invertScrollDirection: false,
+
+	// External editor defaults
+	externalEditorName: "",
+	externalEditorPathMac: "",
+	externalEditorPathWin: "",
+
+	// Debug defaults
+	debugMode: false
 };
 
 // Add helper function to get the correct path based on platform
@@ -55,6 +73,32 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 						this.plugin.settings.showFileInfo = value;
 						await this.plugin.saveSettings();
 					});
+			});
+
+		new Setting(containerEl)
+			.setName("Resize options")
+			.setHeading();
+
+		new Setting(containerEl)
+			.setName("Custom resize width")
+			.setDesc("Set a custom resize width in pixels (leave empty to disable)")
+			.addText(text => {
+				text
+					.setPlaceholder("e.g., 600")
+					.setValue(this.plugin.settings.customResizeWidth ? String(this.plugin.settings.customResizeWidth) : "")
+					.onChange(async (value) => {
+						const width = parseInt(value);
+						this.plugin.settings.customResizeWidth = !isNaN(width) && width > 0 ? width : 0;
+						await this.plugin.saveSettings();
+					});
+			})
+			.addText(text => {
+				text.inputEl.style.width = "30px";
+				text.inputEl.style.textAlign = "left";
+				text.inputEl.style.border = "none";
+				text.inputEl.style.backgroundColor = "transparent";
+				text.setValue("px");
+				text.setDisabled(true);
 			});
 
 		new Setting(containerEl)

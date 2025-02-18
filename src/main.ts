@@ -463,10 +463,12 @@ export default class PixelPerfectImage extends Plugin {
 		// Get current scale and file info
 		const result = await this.getImageFileWithErrorHandling(img);
 		let currentScale: number | null = null;
+		let currentWidth: number | null = null;
 		
 		if (result) {
 			const { width } = await this.readImageDimensions(result.imgFile);
-			currentScale = this.calculateImageScale(img, result.activeFile, result.imgFile, width);
+			currentWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
+			currentScale = currentWidth !== null ? Math.round((currentWidth / width) * 100) : null;
 		}
 
 		// Add resize options
@@ -480,6 +482,18 @@ export default class PixelPerfectImage extends Plugin {
 				currentScale === percentage
 			);
 		});
+
+		// Add custom resize option if set
+		if (this.settings.customResizeWidth > 0) {
+			this.addMenuItem(
+				menu,
+				`Resize to ${this.settings.customResizeWidth}px`,
+				'image',
+				async () => await this.resizeImage(ev, this.settings.customResizeWidth, true),
+				`Failed to resize image to ${this.settings.customResizeWidth}px`,
+				currentWidth === this.settings.customResizeWidth
+			);
+		}
 
 		// Add option to remove custom size if one is set
 		if (result && currentScale !== null) {
@@ -551,9 +565,10 @@ export default class PixelPerfectImage extends Plugin {
 	/**
 	 * Resizes an image in the editor by updating its wikilink width parameter.
 	 * @param ev - Mouse event containing the target image
-	 * @param percentage - Percentage to resize the image to
+	 * @param size - Either a percentage (e.g. 50) or absolute width in pixels (e.g. 600)
+	 * @param isAbsolute - If true, size is treated as pixels, otherwise as percentage
 	 */
-	private async resizeImage(ev: MouseEvent, percentage: number) {
+	private async resizeImage(ev: MouseEvent, size: number, isAbsolute = false) {
 		const img = this.findImageElement(ev.target);
 		if (!img) {
 			throw new Error("Could not find the image element");
@@ -565,7 +580,7 @@ export default class PixelPerfectImage extends Plugin {
 		}
 
 		const { width } = await this.readImageDimensions(result.imgFile);
-		const newWidth = Math.round((width * percentage) / 100);
+		const newWidth = isAbsolute ? size : Math.round((width * size) / 100);
 		await this.updateImageLinkWidth(result.imgFile, newWidth);
 	}
 
