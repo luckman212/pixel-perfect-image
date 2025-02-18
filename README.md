@@ -4,7 +4,7 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Features
 
-- 📐 **Pixel perfect resize:** Quickly resize images to pixel perfect percentages (100%, 50%, 25%)
+- 📐 **Pixel perfect resize:** Quickly resize images to pixel perfect percentages (100%, 50%, 25%) or a custom width in pixels
 - 📋️ **Mousewheel support:** Quick resize with mousewheel (hold Alt/Option and scroll)
 - 📋 **Copy image to clipboard:** For quick paste into other programs
 - 🔗 **Copy local file path to clipboard:** If you want to access the image from terminal
@@ -48,6 +48,12 @@ After resizing to 50%:
 ```
 (assuming the original image was 1000px wide)
 
+Using custom resize width:
+```md
+![[image.png|600]]
+```
+(setting exact width to 600 pixels)
+
 ## Installation
 
 1. Open Obsidian Settings
@@ -59,6 +65,18 @@ After resizing to 50%:
 ## Settings
 
 ![Settings](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot2.png?raw=true)
+
+The plugin offers several settings to customize its behavior:
+
+- **Show file information:** Toggle display of file info in the context menu
+- **Resize options:**
+  - **Custom resize width:** Set a custom width in pixels for quick resizing (optional)
+- **Mousewheel zoom:**
+  - Enable/disable mousewheel zoom
+  - Choose modifier key (Alt/Ctrl/Shift)
+  - Adjust zoom step size
+  - Invert scroll direction
+- **External editor:** Configure path to external image editor
 
 ## Known Issues
 
