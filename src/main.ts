@@ -29,9 +29,7 @@ export default class PixelPerfectImage extends Plugin {
 	/** Cache to store image dimensions to avoid repeated file reads */
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
-	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private wheelEventCleanup: (() => void) | null = null;
-	private debouncedHandleImageWheel: ReturnType<typeof debounce> | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -105,26 +103,12 @@ export default class PixelPerfectImage extends Plugin {
 			// Prevent default immediately when we know we'll handle the zoom
 			ev.preventDefault();
 			
-			// Use debounce for the actual resize operation
-			if (this.debouncedHandleImageWheel) {
-				this.debouncedHandleImageWheel(ev, img).catch((error: Error) => {
-					this.errorLog('Error handling wheel event:', error);
-					new Notice('Failed to resize image');
-				});
-			}
+			// Handle the wheel event directly
+			this.handleImageWheel(ev, img).catch((error: Error) => {
+				this.errorLog('Error handling wheel event:', error);
+				new Notice('Failed to resize image');
+			});
 		};
-
-		// Create debounced function for the actual resize
-		const debouncedHandleImageWheel = debounce(async (ev: WheelEvent, img: HTMLImageElement) => {
-			try {
-				await this.handleImageWheel(ev, img);
-			} catch (error) {
-				this.errorLog('Error in wheel handler:', error);
-			}
-		}, this.WHEEL_DEBOUNCE_MS, true);  // true = leading edge
-
-		// Store the debounced function on the instance
-		this.debouncedHandleImageWheel = debouncedHandleImageWheel;
 
 		// Register all event handlers with non-passive wheel listener
 		this.registerDomEvent(doc, "keydown", keydownHandler);
@@ -135,9 +119,6 @@ export default class PixelPerfectImage extends Plugin {
 		// Store cleanup function
 		this.wheelEventCleanup = () => {
 			doc.removeEventListener("wheel", wheelHandler);
-			if (this.debouncedHandleImageWheel) {
-				this.debouncedHandleImageWheel.cancel();
-			}
 			this.debugLog('Wheel events cleaned up');
 		};
 	}
