@@ -430,7 +430,7 @@ export default class PixelPerfectImage extends Plugin {
 		// Add copy to clipboard option first
 		this.addMenuItem(
 			menu,
-			'Copy image',
+			'Copy Image',
 			'copy',
 			async () => {
 				await this.copyImageToClipboard(img);
@@ -442,7 +442,7 @@ export default class PixelPerfectImage extends Plugin {
 		// Add copy local path option
 		this.addMenuItem(
 			menu,
-			'Copy local path',
+			'Copy Local Path',
 			'link',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(img);
@@ -491,7 +491,7 @@ export default class PixelPerfectImage extends Plugin {
 		if (result && currentScale !== null) {
 			this.addMenuItem(
 				menu,
-				'Remove custom size',
+				'Remove Custom Size',
 				'reset',
 				async () => {
 					await this.removeImageWidth(result.imgFile);

@@ -59,7 +59,6 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Mousewheel zoom")
-			.setDesc("Settings for zooming images with mousewheel")
 			.setHeading();
 
 		new Setting(containerEl)
@@ -93,6 +92,16 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Zoom step size")
 			.setDesc("Percentage to zoom per scroll step")
+			.addExtraButton(button => {
+				button
+					.setIcon("reset")
+					.setTooltip("Reset to default")
+					.onClick(async () => {
+						this.plugin.settings.wheelZoomPercentage = DEFAULT_SETTINGS.wheelZoomPercentage;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			})
 			.addSlider(slider => {
 				slider
 					.setValue(this.plugin.settings.wheelZoomPercentage)
@@ -118,7 +127,6 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("External editor")
-			.setDesc("Settings for external image editor integration")
 			.setHeading();
 
 		new Setting(containerEl)
