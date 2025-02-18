@@ -524,7 +524,7 @@ export default class PixelPerfectImage extends Plugin {
 		// Add open in default app option
 		this.addMenuItem(
 			menu,
-			'Open in default app',
+			'Open in Default app',
 			'image',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
