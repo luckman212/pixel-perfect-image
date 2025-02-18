@@ -31,6 +31,7 @@ export default class PixelPerfectImage extends Plugin {
 	private isModifierKeyHeld = false;
 	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private wheelEventCleanup: (() => void) | null = null;
+	private debouncedHandleImageWheel: ReturnType<typeof debounce> | null = null;
 
 	async onload() {
 		await this.loadSettings();
@@ -88,33 +89,42 @@ export default class PixelPerfectImage extends Plugin {
 		};
 
 		// Create bound event handler for cleanup
-		const wheelHandler = debounce(async (ev: WheelEvent) => {
-			try {
-				// If zoom is not enabled or modifier not held, let default scroll happen
-				if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
+		const wheelHandler = (ev: WheelEvent) => {
+			// If zoom is not enabled or modifier not held, let default scroll happen
+			if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
 
-				// Verify key is still held (handles Alt+Tab cases)
-				if (!this.isModifierKeyStillHeld(ev)) {
-					this.setModifierKeyState(false);
-					return;
-				}
+			// Verify key is still held (handles Alt+Tab cases)
+			if (!this.isModifierKeyStillHeld(ev)) {
+				this.setModifierKeyState(false);
+				return;
+			}
 
-				const img = this.findImageElement(ev.target);
-				if (!img) return;
+			const img = this.findImageElement(ev.target);
+			if (!img) return;
 
-				// Only prevent default if we're actually going to handle the zoom
-				ev.preventDefault();
-				
-				try {
-					await this.handleImageWheel(ev, img);
-				} catch (error) {
+			// Prevent default immediately when we know we'll handle the zoom
+			ev.preventDefault();
+			
+			// Use debounce for the actual resize operation
+			if (this.debouncedHandleImageWheel) {
+				this.debouncedHandleImageWheel(ev, img).catch((error: Error) => {
 					this.errorLog('Error handling wheel event:', error);
 					new Notice('Failed to resize image');
-				}
+				});
+			}
+		};
+
+		// Create debounced function for the actual resize
+		const debouncedHandleImageWheel = debounce(async (ev: WheelEvent, img: HTMLImageElement) => {
+			try {
+				await this.handleImageWheel(ev, img);
 			} catch (error) {
 				this.errorLog('Error in wheel handler:', error);
 			}
 		}, this.WHEEL_DEBOUNCE_MS, true);  // true = leading edge
+
+		// Store the debounced function on the instance
+		this.debouncedHandleImageWheel = debouncedHandleImageWheel;
 
 		// Register all event handlers with non-passive wheel listener
 		this.registerDomEvent(doc, "keydown", keydownHandler);
@@ -125,6 +135,9 @@ export default class PixelPerfectImage extends Plugin {
 		// Store cleanup function
 		this.wheelEventCleanup = () => {
 			doc.removeEventListener("wheel", wheelHandler);
+			if (this.debouncedHandleImageWheel) {
+				this.debouncedHandleImageWheel.cancel();
+			}
 			this.debugLog('Wheel events cleaned up');
 		};
 	}

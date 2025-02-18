@@ -103,14 +103,28 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 					});
 			})
 			.addSlider(slider => {
+				const valueDisplay = createSpan();
+				valueDisplay.style.minWidth = "2.5em";
+				valueDisplay.style.textAlign = "right";
+				valueDisplay.style.marginRight = "1em";
+				
+				const updateDisplay = (value: number) => {
+					valueDisplay.setText(`${value}%`);
+				};
+				
 				slider
+					.setDynamicTooltip()
 					.setValue(this.plugin.settings.wheelZoomPercentage)
 					.onChange(async (value) => {
 						if (!isNaN(value) && value > 0) {
+							updateDisplay(value);
 							this.plugin.settings.wheelZoomPercentage = value;
 							await this.plugin.saveSettings();
 						}
 					});
+				
+				updateDisplay(this.plugin.settings.wheelZoomPercentage);
+				slider.sliderEl.parentElement?.prepend(valueDisplay);
 			});
 
 		new Setting(containerEl)
