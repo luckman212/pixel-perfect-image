@@ -3,29 +3,53 @@ import PixelPerfectImage from './main';
 
 
 export interface PixelPerfectImageSettings {
-	debugMode: boolean;
+	// Menu options
 	showFileInfo: boolean;
-	externalEditorName: string;
-	externalEditorPathMac: string;
-	externalEditorPathWin: string;
+	showShowInFileExplorer: boolean;
+	showRenameOption: boolean;
+	showOpenInNewTab: boolean;
+	showOpenInDefaultApp: boolean;
+	showResizeOptions: boolean;
+	customResizeWidth: number;  // in pixels (0 means disabled)
+
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
 	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
 	wheelZoomPercentage: number;
 	invertScrollDirection: boolean;
+
+	// External editor settings
+	externalEditorName: string;
+	externalEditorPathMac: string;
+	externalEditorPathWin: string;
+
+	// Debug settings
+	debugMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
-	debugMode: false,
+	// Menu options
 	showFileInfo: true,
-	externalEditorName: "",
-	externalEditorPathMac: "",
-	externalEditorPathWin: "",
+	showShowInFileExplorer: true,
+	showRenameOption: true,
+	showOpenInNewTab: true,
+	showOpenInDefaultApp: true,
+	showResizeOptions: true,
+	customResizeWidth: 0,  // disabled by default
+
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
 	wheelModifierKey: 'Alt',
 	wheelZoomPercentage: 20,
-	invertScrollDirection: false
+	invertScrollDirection: false,
+
+	// External editor defaults
+	externalEditorName: "",
+	externalEditorPathMac: "",
+	externalEditorPathWin: "",
+
+	// Debug defaults
+	debugMode: false,
 };
 
 // Add helper function to get the correct path based on platform
@@ -45,6 +69,11 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// Menu Options Section
+		new Setting(containerEl)
+			.setName("Menu options")
+			.setHeading();
+
 		new Setting(containerEl)
 			.setName("Show file information")
 			.setDesc("Show file information in the context menu")
@@ -58,8 +87,81 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
+			.setName('Show in file explorer')
+			.setDesc('Show option to reveal image in system file explorer')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showShowInFileExplorer)
+				.onChange(async (value) => {
+					this.plugin.settings.showShowInFileExplorer = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show rename option')
+			.setDesc('Show option to rename image file')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showRenameOption)
+				.onChange(async (value) => {
+					this.plugin.settings.showRenameOption = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show open in new tab')
+			.setDesc('Show option to open image in new tab')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showOpenInNewTab)
+				.onChange(async (value) => {
+					this.plugin.settings.showOpenInNewTab = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show open in default app')
+			.setDesc('Show option to open image in default app')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showOpenInDefaultApp)
+				.onChange(async (value) => {
+					this.plugin.settings.showOpenInDefaultApp = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show resize options')
+			.setDesc('Show image resize options in the context menu')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showResizeOptions)
+				.onChange(async (value) => {
+					this.plugin.settings.showResizeOptions = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName("Custom resize width")
+			.setDesc("Set a custom resize width in pixels (leave empty to disable)")
+			.addText(text => {
+				text
+					.setPlaceholder("e.g., 600")
+					.setValue(this.plugin.settings.customResizeWidth ? String(this.plugin.settings.customResizeWidth) : "")
+					.onChange(async (value) => {
+						const width = parseInt(value);
+						this.plugin.settings.customResizeWidth = !isNaN(width) && width > 0 ? width : 0;
+						await this.plugin.saveSettings();
+					});
+			})
+			.addText(text => {
+				text.inputEl.style.width = "30px";
+				text.inputEl.style.textAlign = "left";
+				text.inputEl.style.border = "none";
+				text.inputEl.style.backgroundColor = "transparent";
+				text.setValue("px");
+				text.setDisabled(true);
+			});
+
+	
+		// Mousewheel zoom section
+		new Setting(containerEl)
 			.setName("Mousewheel zoom")
-			.setDesc("Settings for zooming images with mousewheel")
 			.setHeading();
 
 		new Setting(containerEl)
@@ -93,15 +195,39 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Zoom step size")
 			.setDesc("Percentage to zoom per scroll step")
+			.addExtraButton(button => {
+				button
+					.setIcon("reset")
+					.setTooltip("Reset to default")
+					.onClick(async () => {
+						this.plugin.settings.wheelZoomPercentage = DEFAULT_SETTINGS.wheelZoomPercentage;
+						await this.plugin.saveSettings();
+						this.display();
+					});
+			})
 			.addSlider(slider => {
+				const valueDisplay = createSpan();
+				valueDisplay.style.minWidth = "2.5em";
+				valueDisplay.style.textAlign = "right";
+				valueDisplay.style.marginRight = "1em";
+				
+				const updateDisplay = (value: number) => {
+					valueDisplay.setText(`${value}%`);
+				};
+				
 				slider
+					.setDynamicTooltip()
 					.setValue(this.plugin.settings.wheelZoomPercentage)
 					.onChange(async (value) => {
 						if (!isNaN(value) && value > 0) {
+							updateDisplay(value);
 							this.plugin.settings.wheelZoomPercentage = value;
 							await this.plugin.saveSettings();
 						}
 					});
+				
+				updateDisplay(this.plugin.settings.wheelZoomPercentage);
+				slider.sliderEl.parentElement?.prepend(valueDisplay);
 			});
 
 		new Setting(containerEl)
@@ -118,7 +244,6 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("External editor")
-			.setDesc("Settings for external image editor integration")
 			.setHeading();
 
 		new Setting(containerEl)
@@ -165,6 +290,11 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 						});
 				});
 		}
+
+		// Developer section
+		new Setting(containerEl)
+			.setName("Developer")
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName("Debug mode")

@@ -1,4 +1,4 @@
-import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter } from 'obsidian';
+import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter, Modal, App } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab, getExternalEditorPath } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
@@ -29,13 +29,15 @@ export default class PixelPerfectImage extends Plugin {
 	/** Cache to store image dimensions to avoid repeated file reads */
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
-	private readonly WHEEL_DEBOUNCE_MS = 25; // Minimum time between wheel updates
 	private wheelEventCleanup: (() => void) | null = null;
 
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new PixelPerfectImageSettingTab(this.app, this));
 		this.registerImageContextMenu();
+		
+		// Add click handler for CMD/CTRL + click
+		this.registerDomEvent(document, 'click', this.handleImageClick.bind(this));
 		
 		// Register mousewheel zoom events
 		this.registerEvent(
@@ -88,33 +90,28 @@ export default class PixelPerfectImage extends Plugin {
 		};
 
 		// Create bound event handler for cleanup
-		const wheelHandler = debounce(async (ev: WheelEvent) => {
-			try {
-				// If zoom is not enabled or modifier not held, let default scroll happen
-				if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
+		const wheelHandler = (ev: WheelEvent) => {
+			// If zoom is not enabled or modifier not held, let default scroll happen
+			if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
 
-				// Verify key is still held (handles Alt+Tab cases)
-				if (!this.isModifierKeyStillHeld(ev)) {
-					this.setModifierKeyState(false);
-					return;
-				}
-
-				const img = this.findImageElement(ev.target);
-				if (!img) return;
-
-				// Only prevent default if we're actually going to handle the zoom
-				ev.preventDefault();
-				
-				try {
-					await this.handleImageWheel(ev, img);
-				} catch (error) {
-					this.errorLog('Error handling wheel event:', error);
-					new Notice('Failed to resize image');
-				}
-			} catch (error) {
-				this.errorLog('Error in wheel handler:', error);
+			// Verify key is still held (handles Alt+Tab cases)
+			if (!this.isModifierKeyStillHeld(ev)) {
+				this.setModifierKeyState(false);
+				return;
 			}
-		}, this.WHEEL_DEBOUNCE_MS, true);  // true = leading edge
+
+			const img = this.findImageElement(ev.target);
+			if (!img) return;
+
+			// Prevent default immediately when we'll handle the zoom
+			ev.preventDefault();
+			
+			// Handle the wheel event directly
+			this.handleImageWheel(ev, img).catch((error: Error) => {
+				this.errorLog('Error handling wheel event:', error);
+				new Notice('Failed to resize image');
+			});
+		};
 
 		// Register all event handlers with non-passive wheel listener
 		this.registerDomEvent(doc, "keydown", keydownHandler);
@@ -202,25 +199,56 @@ export default class PixelPerfectImage extends Plugin {
 	 * The menu provides options to view image dimensions and resize the image.
 	 */
 	private registerImageContextMenu(): void {
-		this.registerDomEvent(document, 'contextmenu', async (ev: MouseEvent) => {
+		// Add support for both desktop right-click and mobile long-press
+		this.registerDomEvent(document, 'contextmenu', this.handleContextMenu.bind(this));
+		
+		// Add mobile long-press support
+		let longPressTimer: NodeJS.Timeout;
+		let isLongPress = false;
+		
+		this.registerDomEvent(document, 'touchstart', (ev: TouchEvent) => {
 			const img = this.findImageElement(ev.target);
 			if (!img) return;
-
-			// Prevent default context menu to show our custom one
-			ev.preventDefault();
-
-			const menu = new Menu();
-			await this.addDimensionsMenuItem(menu, img);
-			await this.addResizeMenuItems(menu, ev);
 			
-			// Add separator before file operations
-			menu.addSeparator();
-			
-			// Add file operation items
-			this.addFileOperationMenuItems(menu, img);
-
-			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
+			isLongPress = false;
+			longPressTimer = setTimeout(() => {
+				isLongPress = true;
+				this.handleContextMenu(ev);
+			}, 500); // 500ms long press
 		});
+		
+		this.registerDomEvent(document, 'touchend', () => {
+			clearTimeout(longPressTimer);
+		});
+		
+		this.registerDomEvent(document, 'touchmove', () => {
+			clearTimeout(longPressTimer);
+		});
+	}
+
+	private async handleContextMenu(ev: MouseEvent | TouchEvent) {
+		const img = this.findImageElement(ev.target);
+		if (!img) return;
+
+		// Prevent default context menu
+		ev.preventDefault();
+
+		const menu = new Menu();
+		await this.addDimensionsMenuItem(menu, img);
+		await this.addResizeMenuItems(menu, ev);
+		
+		// Only add file operations on desktop
+		if (!Platform.isMobile) {
+			menu.addSeparator();
+			this.addFileOperationMenuItems(menu, img);
+		}
+
+		// Position menu at event coordinates
+		const position = {
+			x: ev instanceof MouseEvent ? ev.pageX : ev.touches[0].pageX,
+			y: ev instanceof MouseEvent ? ev.pageY : ev.touches[0].pageY
+		};
+		menu.showAtPosition(position);
 	}
 
 	/**
@@ -430,7 +458,7 @@ export default class PixelPerfectImage extends Plugin {
 		// Add copy to clipboard option first
 		this.addMenuItem(
 			menu,
-			'Copy image',
+			'Copy Image',
 			'copy',
 			async () => {
 				await this.copyImageToClipboard(img);
@@ -442,7 +470,7 @@ export default class PixelPerfectImage extends Plugin {
 		// Add copy local path option
 		this.addMenuItem(
 			menu,
-			'Copy local path',
+			'Copy Local Path',
 			'link',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(img);
@@ -457,9 +485,9 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to copy file path'
 		);
 
-		// Only show resize options in editing mode
-		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (markdownView?.getMode() !== 'source') {
+		// Only show resize options if enabled in settings
+		if (!this.settings.showResizeOptions) {
+			this.debugLog('Skipping resize options - disabled in settings');
 			return;
 		}
 
@@ -469,10 +497,13 @@ export default class PixelPerfectImage extends Plugin {
 		// Get current scale and file info
 		const result = await this.getImageFileWithErrorHandling(img);
 		let currentScale: number | null = null;
+		let currentWidth: number | null = null;
 		
 		if (result) {
 			const { width } = await this.readImageDimensions(result.imgFile);
-			currentScale = this.calculateImageScale(img, result.activeFile, result.imgFile, width);
+			currentWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
+			currentScale = currentWidth !== null ? Math.round((currentWidth / width) * 100) : null;
+			this.debugLog('Current image scale:', currentScale, 'width:', currentWidth);
 		}
 
 		// Add resize options
@@ -487,11 +518,23 @@ export default class PixelPerfectImage extends Plugin {
 			);
 		});
 
+		// Add custom resize option if set
+		if (this.settings.customResizeWidth > 0) {
+			this.addMenuItem(
+				menu,
+				`Resize to ${this.settings.customResizeWidth}px`,
+				'image',
+				async () => await this.resizeImage(ev, this.settings.customResizeWidth, true),
+				`Failed to resize image to ${this.settings.customResizeWidth}px`,
+				currentWidth === this.settings.customResizeWidth
+			);
+		}
+
 		// Add option to remove custom size if one is set
 		if (result && currentScale !== null) {
 			this.addMenuItem(
 				menu,
-				'Remove custom size',
+				'Remove Custom Size',
 				'reset',
 				async () => {
 					await this.removeImageWidth(result.imgFile);
@@ -506,33 +549,75 @@ export default class PixelPerfectImage extends Plugin {
 	 * Adds file operation menu items like Show in Finder/Explorer and Open in Default App
 	 */
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
+		// Skip all desktop-only operations on mobile
+		if (Platform.isMobile) return;
+
 		const isMac = Platform.isMacOS;
 
 		// Add show in system explorer option
-		this.addMenuItem(
-			menu,
-			isMac ? 'Show in Finder' : 'Show in Explorer',
-			'folder-open',
-			async () => {
-				const result = await this.getImageFileWithErrorHandling(target);
-				if (!result) return;
-				await this.showInSystemExplorer(result.imgFile);
-			},
-			'Failed to open system explorer'
-		);
+		if (this.settings.showShowInFileExplorer) {
+			this.addMenuItem(
+				menu,
+				isMac ? 'Show in Finder' : 'Show in Explorer',
+				'folder-open',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.showInSystemExplorer(result.imgFile);
+				},
+				'Failed to open system explorer'
+			);
+		}
+
+		// Add rename option
+		if (this.settings.showRenameOption) {
+			this.addMenuItem(
+				menu,
+				'Rename Image',
+				'pencil',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.renameImage(result.imgFile);
+				},
+				'Failed to rename image'
+			);
+		}
+
+		// Add separator if any file operation was added
+		if (this.settings.showRenameOption || this.settings.showShowInFileExplorer) {
+			menu.addSeparator();
+		}
+
+		// Add open in new tab option
+		if (this.settings.showOpenInNewTab) {
+			this.addMenuItem(
+				menu,
+				'Open in New Tab',
+				'link-2',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.app.workspace.openLinkText(result.imgFile.path, '', true);
+				},
+				'Failed to open image in new tab'
+			);
+		}
 
 		// Add open in default app option
-		this.addMenuItem(
-			menu,
-			'Open in default app',
-			'image',
-			async () => {
-				const result = await this.getImageFileWithErrorHandling(target);
-				if (!result) return;
-				await this.openInDefaultApp(result.imgFile);
-			},
-			'Failed to open in default app'
-		);
+		if (this.settings.showOpenInDefaultApp) {
+			this.addMenuItem(
+				menu,
+				'Open in Default app',
+				'image',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.openInDefaultApp(result.imgFile);
+				},
+				'Failed to open in default app'
+			);
+		}
 
 		// Add external editor option if path is set
 		const editorPath = getExternalEditorPath(this.settings);
@@ -551,15 +636,17 @@ export default class PixelPerfectImage extends Plugin {
 			);
 		}
 	}
+
 	// Image Operations
 	// ----------------
 
 	/**
 	 * Resizes an image in the editor by updating its wikilink width parameter.
 	 * @param ev - Mouse event containing the target image
-	 * @param percentage - Percentage to resize the image to
+	 * @param size - Either a percentage (e.g. 50) or absolute width in pixels (e.g. 600)
+	 * @param isAbsolute - If true, size is treated as pixels, otherwise as percentage
 	 */
-	private async resizeImage(ev: MouseEvent, percentage: number) {
+	private async resizeImage(ev: MouseEvent, size: number, isAbsolute = false) {
 		const img = this.findImageElement(ev.target);
 		if (!img) {
 			throw new Error("Could not find the image element");
@@ -571,7 +658,7 @@ export default class PixelPerfectImage extends Plugin {
 		}
 
 		const { width } = await this.readImageDimensions(result.imgFile);
-		const newWidth = Math.round((width * percentage) / 100);
+		const newWidth = isAbsolute ? size : Math.round((width * size) / 100);
 		await this.updateImageLinkWidth(result.imgFile, newWidth);
 	}
 
@@ -1018,5 +1105,143 @@ export default class PixelPerfectImage extends Plugin {
 				this.debugLog(`Launched ${editorName}:`, cmd);
 			}
 		});
+	}
+
+	private async renameImage(file: TFile): Promise<void> {
+		const newName = await this.promptForNewName(file);
+		if (!newName) return;  // User cancelled
+
+		try {
+			// Get the directory path and construct new path
+			const dirPath = file.parent?.path || "/";
+			const newPath = `${dirPath}/${newName}`;
+
+			// Rename the file
+			await this.app.fileManager.renameFile(file, newPath);
+			new Notice('Image renamed successfully');
+		} catch (error) {
+			this.errorLog('Failed to rename file:', error);
+			new Notice('Failed to rename image');
+		}
+	}
+
+	private async promptForNewName(file: TFile): Promise<string | null> {
+		return new Promise((resolve) => {
+			const modal = new FileNameInputModal(this.app, file.name, (result) => {
+				resolve(result);
+			});
+			modal.open();
+		});
+	}
+
+	/**
+	 * Handles click events on images, opening them in a new tab when CMD/CTRL is pressed
+	 */
+	private handleImageClick(ev: MouseEvent): void {
+		// Check if CMD (Mac) or CTRL (Windows/Linux) is held
+		if (!(ev.metaKey || ev.ctrlKey)) return;
+
+		const img = this.findImageElement(ev.target);
+		if (!img) return;
+
+		// Prevent default click behavior
+		ev.preventDefault();
+
+		// Get the image file and open in new tab
+		this.getImageFileWithErrorHandling(img)
+			.then(result => {
+				if (result) {
+					this.app.workspace.openLinkText(result.imgFile.path, '', true);
+					this.debugLog('Opening image in new tab:', result.imgFile.path);
+				}
+			})
+			.catch(error => {
+				this.errorLog('Failed to open image in new tab:', error);
+				new Notice('Failed to open image in new tab');
+			});
+	}
+}
+
+class FileNameInputModal extends Modal {
+	private result: string | null = null;
+	private readonly onSubmit: (result: string | null) => void;
+	private readonly originalName: string;
+
+	constructor(app: App, originalName: string, onSubmit: (result: string | null) => void) {
+		super(app);
+		this.originalName = originalName;
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.style.padding = '0.8em 1.2em'; // Reduce padding
+
+		contentEl.createEl("h2", { 
+			text: "Rename image",
+			cls: 'modal-title' // Add class for consistency
+		}).style.marginTop = '0'; // Remove top margin
+
+		const form = contentEl.createEl("form");
+		form.style.display = "flex";
+		form.style.flexDirection = "column";
+		form.style.gap = "0.8em";
+
+		const input = form.createEl("input", {
+			type: "text",
+			value: this.originalName
+		});
+		input.style.width = "100%";
+		
+		// Select filename without extension
+		const lastDotIndex = this.originalName.lastIndexOf('.');
+		if (lastDotIndex > 0) {
+			const nameWithoutExt = this.originalName.substring(0, lastDotIndex);
+			input.setSelectionRange(0, nameWithoutExt.length);
+		}
+
+		const buttonContainer = form.createDiv();
+		buttonContainer.style.display = "flex";
+		buttonContainer.style.justifyContent = "flex-end";
+		buttonContainer.style.gap = "0.8em";
+		buttonContainer.style.marginTop = "0.4em";
+
+		const submitButton = buttonContainer.createEl("button", { 
+			text: "Rename",
+			type: "submit",
+			cls: 'mod-cta' // Add Obsidian's accent class
+		});
+		
+		const cancelButton = buttonContainer.createEl("button", { 
+			text: "Cancel",
+			type: "button"
+		});
+		
+		cancelButton.addEventListener("click", () => {
+			this.onSubmit(null);
+			this.close();
+		});
+
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			const newName = input.value.trim();
+			if (newName && newName !== this.originalName) {
+				this.onSubmit(newName);
+			} else {
+				this.onSubmit(null);
+			}
+			this.close();
+		});
+
+		input.focus();
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+		if (this.result === undefined) {
+			this.onSubmit(null);
+		}
 	}
 }
