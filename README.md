@@ -72,6 +72,10 @@ When using Pixel Perfect Image on Windows PCs with the Minimal theme, the built-
 
 This will ensure the best experience with Pixel Perfect Image's right click menu.
 
+### Image Converter Plugin Compatibility
+
+If you're using the [Image Converter plugin](https://github.com/xryul/obsidian-image-converter), you should disable its "Right-click menu" option in settings to prevent conflicts with Pixel Perfect Image's context menu.
+
 ## Support
 
 If you have any questions, suggestions, or issues, please open an issue on the [GitHub repository](https://github.com/johansan/pixel-perfect-image).
