@@ -3,10 +3,13 @@ import PixelPerfectImage from './main';
 
 
 export interface PixelPerfectImageSettings {
-	// File information settings
+	// Menu options
 	showFileInfo: boolean;
-
-	// Resize options
+	showShowInFileExplorer: boolean;
+	showRenameOption: boolean;
+	showOpenInNewTab: boolean;
+	showOpenInDefaultApp: boolean;
+	showResizeOptions: boolean;
 	customResizeWidth: number;  // in pixels (0 means disabled)
 
 	// Mousewheel zoom settings
@@ -22,19 +25,16 @@ export interface PixelPerfectImageSettings {
 
 	// Debug settings
 	debugMode: boolean;
-
-	// Menu options
-	showResizeOptions: boolean;
-	showOpenInNewTab: boolean;
-	showShowInFileExplorer: boolean;
-	showOpenInDefaultApp: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
-	// File information defaults
+	// Menu options
 	showFileInfo: true,
-
-	// Resize options defaults
+	showShowInFileExplorer: true,
+	showRenameOption: true,
+	showOpenInNewTab: true,
+	showOpenInDefaultApp: true,
+	showResizeOptions: true,
 	customResizeWidth: 0,  // disabled by default
 
 	// Mousewheel zoom defaults
@@ -50,12 +50,6 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 
 	// Debug defaults
 	debugMode: false,
-
-	// Menu options
-	showResizeOptions: true,
-	showOpenInNewTab: true,
-	showShowInFileExplorer: true,
-	showOpenInDefaultApp: true,
 };
 
 // Add helper function to get the correct path based on platform
@@ -93,12 +87,22 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Show resize options')
-			.setDesc('Show image resize options in the context menu')
+			.setName('Show in file explorer')
+			.setDesc('Show option to reveal image in system file explorer')
 			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showResizeOptions)
+				.setValue(this.plugin.settings.showShowInFileExplorer)
 				.onChange(async (value) => {
-					this.plugin.settings.showResizeOptions = value;
+					this.plugin.settings.showShowInFileExplorer = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show rename option')
+			.setDesc('Show option to rename image file')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showRenameOption)
+				.onChange(async (value) => {
+					this.plugin.settings.showRenameOption = value;
 					await this.plugin.saveSettings();
 				}));
 
@@ -113,22 +117,22 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Show in file explorer')
-			.setDesc('Show option to reveal image in system file explorer')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showShowInFileExplorer)
-				.onChange(async (value) => {
-					this.plugin.settings.showShowInFileExplorer = value;
-					await this.plugin.saveSettings();
-				}));
-
-		new Setting(containerEl)
 			.setName('Show open in default app')
 			.setDesc('Show option to open image in default app')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.showOpenInDefaultApp)
 				.onChange(async (value) => {
 					this.plugin.settings.showOpenInDefaultApp = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show resize options')
+			.setDesc('Show image resize options in the context menu')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showResizeOptions)
+				.onChange(async (value) => {
+					this.plugin.settings.showResizeOptions = value;
 					await this.plugin.saveSettings();
 				}));
 

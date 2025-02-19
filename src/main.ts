@@ -1,4 +1,4 @@
-import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter } from 'obsidian';
+import { debounce, Menu, MarkdownView, Notice, Plugin, TFile, normalizePath, Platform, FileSystemAdapter, Modal, App } from 'obsidian';
 import { PixelPerfectImageSettings, DEFAULT_SETTINGS, PixelPerfectImageSettingTab, getExternalEditorPath } from './settings';
 import { join } from 'path';
 import { exec } from "child_process";
@@ -100,7 +100,7 @@ export default class PixelPerfectImage extends Plugin {
 			const img = this.findImageElement(ev.target);
 			if (!img) return;
 
-			// Prevent default immediately when we know we'll handle the zoom
+			// Prevent default immediately when we'll handle the zoom
 			ev.preventDefault();
 			
 			// Handle the wheel event directly
@@ -532,6 +532,26 @@ export default class PixelPerfectImage extends Plugin {
 			);
 		}
 
+		// Add rename option
+		if (this.settings.showRenameOption) {
+			this.addMenuItem(
+				menu,
+				'Rename Image',
+				'pencil',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.renameImage(result.imgFile);
+				},
+				'Failed to rename image'
+			);
+		}
+
+		// Add separator if any file operation was added
+		if (this.settings.showRenameOption || this.settings.showShowInFileExplorer) {
+			menu.addSeparator();
+		}
+
 		// Add open in new tab option
 		if (this.settings.showOpenInNewTab) {
 			this.addMenuItem(
@@ -579,6 +599,7 @@ export default class PixelPerfectImage extends Plugin {
 			);
 		}
 	}
+
 	// Image Operations
 	// ----------------
 
@@ -1047,5 +1068,116 @@ export default class PixelPerfectImage extends Plugin {
 				this.debugLog(`Launched ${editorName}:`, cmd);
 			}
 		});
+	}
+
+	private async renameImage(file: TFile): Promise<void> {
+		const newName = await this.promptForNewName(file);
+		if (!newName) return;  // User cancelled
+
+		try {
+			// Get the directory path and construct new path
+			const dirPath = file.parent?.path || "/";
+			const newPath = `${dirPath}/${newName}`;
+
+			// Rename the file
+			await this.app.fileManager.renameFile(file, newPath);
+			new Notice('Image renamed successfully');
+		} catch (error) {
+			this.errorLog('Failed to rename file:', error);
+			new Notice('Failed to rename image');
+		}
+	}
+
+	private async promptForNewName(file: TFile): Promise<string | null> {
+		return new Promise((resolve) => {
+			const modal = new FileNameInputModal(this.app, file.name, (result) => {
+				resolve(result);
+			});
+			modal.open();
+		});
+	}
+}
+
+class FileNameInputModal extends Modal {
+	private result: string | null = null;
+	private readonly onSubmit: (result: string | null) => void;
+	private readonly originalName: string;
+
+	constructor(app: App, originalName: string, onSubmit: (result: string | null) => void) {
+		super(app);
+		this.originalName = originalName;
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen() {
+		const { contentEl } = this;
+		contentEl.empty();
+		contentEl.style.padding = '0.8em 1.2em'; // Reduce padding
+
+		contentEl.createEl("h2", { 
+			text: "Rename image",
+			cls: 'modal-title' // Add class for consistency
+		}).style.marginTop = '0'; // Remove top margin
+
+		const form = contentEl.createEl("form");
+		form.style.display = "flex";
+		form.style.flexDirection = "column";
+		form.style.gap = "0.8em";
+
+		const input = form.createEl("input", {
+			type: "text",
+			value: this.originalName
+		});
+		input.style.width = "100%";
+		
+		// Select filename without extension
+		const lastDotIndex = this.originalName.lastIndexOf('.');
+		if (lastDotIndex > 0) {
+			const nameWithoutExt = this.originalName.substring(0, lastDotIndex);
+			input.setSelectionRange(0, nameWithoutExt.length);
+		}
+
+		const buttonContainer = form.createDiv();
+		buttonContainer.style.display = "flex";
+		buttonContainer.style.justifyContent = "flex-end";
+		buttonContainer.style.gap = "0.8em";
+		buttonContainer.style.marginTop = "0.4em";
+
+		const submitButton = buttonContainer.createEl("button", { 
+			text: "Rename",
+			type: "submit",
+			cls: 'mod-cta' // Add Obsidian's accent class
+		});
+		
+		const cancelButton = buttonContainer.createEl("button", { 
+			text: "Cancel",
+			type: "button"
+		});
+		
+		cancelButton.addEventListener("click", () => {
+			this.onSubmit(null);
+			this.close();
+		});
+
+		form.addEventListener("submit", (e) => {
+			e.preventDefault();
+			const newName = input.value.trim();
+			if (newName && newName !== this.originalName) {
+				this.onSubmit(newName);
+			} else {
+				this.onSubmit(null);
+			}
+			this.close();
+		});
+
+		input.focus();
+	}
+
+	onClose() {
+		const { contentEl } = this;
+		contentEl.empty();
+		if (this.result === undefined) {
+			this.onSubmit(null);
+		}
 	}
 }
