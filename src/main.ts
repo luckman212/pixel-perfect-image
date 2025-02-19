@@ -36,6 +36,9 @@ export default class PixelPerfectImage extends Plugin {
 		this.addSettingTab(new PixelPerfectImageSettingTab(this.app, this));
 		this.registerImageContextMenu();
 		
+		// Add click handler for CMD/CTRL + click
+		this.registerDomEvent(document, 'click', this.handleImageClick.bind(this));
+		
 		// Register mousewheel zoom events
 		this.registerEvent(
 			this.app.workspace.on("layout-change", () => this.registerWheelEvents(window))
@@ -196,25 +199,56 @@ export default class PixelPerfectImage extends Plugin {
 	 * The menu provides options to view image dimensions and resize the image.
 	 */
 	private registerImageContextMenu(): void {
-		this.registerDomEvent(document, 'contextmenu', async (ev: MouseEvent) => {
+		// Add support for both desktop right-click and mobile long-press
+		this.registerDomEvent(document, 'contextmenu', this.handleContextMenu.bind(this));
+		
+		// Add mobile long-press support
+		let longPressTimer: NodeJS.Timeout;
+		let isLongPress = false;
+		
+		this.registerDomEvent(document, 'touchstart', (ev: TouchEvent) => {
 			const img = this.findImageElement(ev.target);
 			if (!img) return;
-
-			// Prevent default context menu to show our custom one
-			ev.preventDefault();
-
-			const menu = new Menu();
-			await this.addDimensionsMenuItem(menu, img);
-			await this.addResizeMenuItems(menu, ev);
 			
-			// Add separator before file operations
-			menu.addSeparator();
-			
-			// Add file operation items
-			this.addFileOperationMenuItems(menu, img);
-
-			menu.showAtPosition({ x: ev.pageX, y: ev.pageY });
+			isLongPress = false;
+			longPressTimer = setTimeout(() => {
+				isLongPress = true;
+				this.handleContextMenu(ev);
+			}, 500); // 500ms long press
 		});
+		
+		this.registerDomEvent(document, 'touchend', () => {
+			clearTimeout(longPressTimer);
+		});
+		
+		this.registerDomEvent(document, 'touchmove', () => {
+			clearTimeout(longPressTimer);
+		});
+	}
+
+	private async handleContextMenu(ev: MouseEvent | TouchEvent) {
+		const img = this.findImageElement(ev.target);
+		if (!img) return;
+
+		// Prevent default context menu
+		ev.preventDefault();
+
+		const menu = new Menu();
+		await this.addDimensionsMenuItem(menu, img);
+		await this.addResizeMenuItems(menu, ev);
+		
+		// Only add file operations on desktop
+		if (!Platform.isMobile) {
+			menu.addSeparator();
+			this.addFileOperationMenuItems(menu, img);
+		}
+
+		// Position menu at event coordinates
+		const position = {
+			x: ev instanceof MouseEvent ? ev.pageX : ev.touches[0].pageX,
+			y: ev instanceof MouseEvent ? ev.pageY : ev.touches[0].pageY
+		};
+		menu.showAtPosition(position);
 	}
 
 	/**
@@ -515,6 +549,9 @@ export default class PixelPerfectImage extends Plugin {
 	 * Adds file operation menu items like Show in Finder/Explorer and Open in Default App
 	 */
 	private addFileOperationMenuItems(menu: Menu, target: HTMLImageElement): void {
+		// Skip all desktop-only operations on mobile
+		if (Platform.isMobile) return;
+
 		const isMac = Platform.isMacOS;
 
 		// Add show in system explorer option
@@ -1095,6 +1132,33 @@ export default class PixelPerfectImage extends Plugin {
 			});
 			modal.open();
 		});
+	}
+
+	/**
+	 * Handles click events on images, opening them in a new tab when CMD/CTRL is pressed
+	 */
+	private handleImageClick(ev: MouseEvent): void {
+		// Check if CMD (Mac) or CTRL (Windows/Linux) is held
+		if (!(ev.metaKey || ev.ctrlKey)) return;
+
+		const img = this.findImageElement(ev.target);
+		if (!img) return;
+
+		// Prevent default click behavior
+		ev.preventDefault();
+
+		// Get the image file and open in new tab
+		this.getImageFileWithErrorHandling(img)
+			.then(result => {
+				if (result) {
+					this.app.workspace.openLinkText(result.imgFile.path, '', true);
+					this.debugLog('Opening image in new tab:', result.imgFile.path);
+				}
+			})
+			.catch(error => {
+				this.errorLog('Failed to open image in new tab:', error);
+				new Notice('Failed to open image in new tab');
+			});
 	}
 }
 
