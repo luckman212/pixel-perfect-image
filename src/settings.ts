@@ -22,6 +22,12 @@ export interface PixelPerfectImageSettings {
 
 	// Debug settings
 	debugMode: boolean;
+
+	// Menu options
+	showResizeOptions: boolean;
+	showOpenInNewTab: boolean;
+	showShowInFileExplorer: boolean;
+	showOpenInDefaultApp: boolean;
 }
 
 export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
@@ -43,7 +49,13 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	externalEditorPathWin: "",
 
 	// Debug defaults
-	debugMode: false
+	debugMode: false,
+
+	// Menu options
+	showResizeOptions: true,
+	showOpenInNewTab: true,
+	showShowInFileExplorer: true,
+	showOpenInDefaultApp: true,
 };
 
 // Add helper function to get the correct path based on platform
@@ -63,6 +75,11 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
+		// Menu Options Section
+		new Setting(containerEl)
+			.setName("Menu options")
+			.setHeading();
+
 		new Setting(containerEl)
 			.setName("Show file information")
 			.setDesc("Show file information in the context menu")
@@ -76,8 +93,44 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Resize options")
-			.setHeading();
+			.setName('Show resize options')
+			.setDesc('Show image resize options in the context menu')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showResizeOptions)
+				.onChange(async (value) => {
+					this.plugin.settings.showResizeOptions = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show open in new tab')
+			.setDesc('Show option to open image in new tab')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showOpenInNewTab)
+				.onChange(async (value) => {
+					this.plugin.settings.showOpenInNewTab = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show in file explorer')
+			.setDesc('Show option to reveal image in system file explorer')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showShowInFileExplorer)
+				.onChange(async (value) => {
+					this.plugin.settings.showShowInFileExplorer = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Show open in default app')
+			.setDesc('Show option to open image in default app')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showOpenInDefaultApp)
+				.onChange(async (value) => {
+					this.plugin.settings.showOpenInDefaultApp = value;
+					await this.plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName("Custom resize width")
@@ -101,6 +154,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 				text.setDisabled(true);
 			});
 
+	
+		// Mousewheel zoom section
 		new Setting(containerEl)
 			.setName("Mousewheel zoom")
 			.setHeading();
@@ -231,6 +286,11 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 						});
 				});
 		}
+
+		// Developer section
+		new Setting(containerEl)
+			.setName("Developer")
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName("Debug mode")

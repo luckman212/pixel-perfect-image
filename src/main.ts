@@ -451,9 +451,9 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to copy file path'
 		);
 
-		// Only show resize options in editing mode
-		const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-		if (markdownView?.getMode() !== 'source') {
+		// Only show resize options if enabled in settings
+		if (!this.settings.showResizeOptions) {
+			this.debugLog('Skipping resize options - disabled in settings');
 			return;
 		}
 
@@ -469,6 +469,7 @@ export default class PixelPerfectImage extends Plugin {
 			const { width } = await this.readImageDimensions(result.imgFile);
 			currentWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
 			currentScale = currentWidth !== null ? Math.round((currentWidth / width) * 100) : null;
+			this.debugLog('Current image scale:', currentScale, 'width:', currentWidth);
 		}
 
 		// Add resize options
@@ -517,30 +518,49 @@ export default class PixelPerfectImage extends Plugin {
 		const isMac = Platform.isMacOS;
 
 		// Add show in system explorer option
-		this.addMenuItem(
-			menu,
-			isMac ? 'Show in Finder' : 'Show in Explorer',
-			'folder-open',
-			async () => {
-				const result = await this.getImageFileWithErrorHandling(target);
-				if (!result) return;
-				await this.showInSystemExplorer(result.imgFile);
-			},
-			'Failed to open system explorer'
-		);
+		if (this.settings.showShowInFileExplorer) {
+			this.addMenuItem(
+				menu,
+				isMac ? 'Show in Finder' : 'Show in Explorer',
+				'folder-open',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.showInSystemExplorer(result.imgFile);
+				},
+				'Failed to open system explorer'
+			);
+		}
+
+		// Add open in new tab option
+		if (this.settings.showOpenInNewTab) {
+			this.addMenuItem(
+				menu,
+				'Open in New Tab',
+				'link-2',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.app.workspace.openLinkText(result.imgFile.path, '', true);
+				},
+				'Failed to open image in new tab'
+			);
+		}
 
 		// Add open in default app option
-		this.addMenuItem(
-			menu,
-			'Open in Default app',
-			'image',
-			async () => {
-				const result = await this.getImageFileWithErrorHandling(target);
-				if (!result) return;
-				await this.openInDefaultApp(result.imgFile);
-			},
-			'Failed to open in default app'
-		);
+		if (this.settings.showOpenInDefaultApp) {
+			this.addMenuItem(
+				menu,
+				'Open in Default app',
+				'image',
+				async () => {
+					const result = await this.getImageFileWithErrorHandling(target);
+					if (!result) return;
+					await this.openInDefaultApp(result.imgFile);
+				},
+				'Failed to open in default app'
+			);
+		}
 
 		// Add external editor option if path is set
 		const editorPath = getExternalEditorPath(this.settings);
