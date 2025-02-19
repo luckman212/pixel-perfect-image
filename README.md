@@ -10,8 +10,10 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 - 🔗 **Copy local file path to clipboard:** If you want to access the image from terminal
 - 📂 **Show in Finder/Explorer:** Open file browser with your image selected
 - 🖼️ **Open in default system viewer:** Open the image in your default application
-- 🎨 **Open in External Editor:** Open the image directly in an external editor like Photoshop or Affinity Photo.
+- 🎨 **Open in External Editor:** Open the image directly in an external editor like Photoshop or Affinity Photo
+- ✏️ **Rename images:** Quickly rename image files right from the context menu
 - 🔄 **Works with both Wikilinks and standard Markdown image links**
+- 🔍 **Quick open in new tab:** CMD/CTRL + click to open image in new tab
 
 ## Screenshot
 
@@ -26,12 +28,15 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
    - Resize to preset percentages
    - Copy, open, or show in system
    - Open in external editor
+   - Rename image files
 4. Quick resize with mousewheel:
    - Hold Alt key (Option on macOS) and scroll over an image
    - Scroll up to increase size, down to decrease
    - Modifier key can be changed in settings (Alt/Ctrl/Shift)
    - Zoom percentage can be adjusted in settings (default 20%)
    - Each scroll step changes size by the configured percentage of current width
+5. Quick actions:
+   - CMD/CTRL + click: Open image in new tab
 
 The plugin calculates the new width based on the original image dimensions.
 
@@ -68,15 +73,24 @@ Using custom resize width:
 
 The plugin offers several settings to customize its behavior:
 
-- **Show file information:** Toggle display of file info in the context menu
-- **Resize options:**
-  - **Custom resize width:** Set a custom width in pixels for quick resizing (optional)
+- **Menu options:**
+  - Show file information in context menu
+  - Show "Show in Explorer/Finder" option
+  - Show rename option
+  - Show "Open in new tab" option
+  - Show "Open in default app" option
+  - Show resize options
+  - Custom resize width in pixels
 - **Mousewheel zoom:**
   - Enable/disable mousewheel zoom
   - Choose modifier key (Alt/Ctrl/Shift)
   - Adjust zoom step size
   - Invert scroll direction
-- **External editor:** Configure path to external image editor
+- **External editor:** 
+  - Set editor name
+  - Configure path to external image editor (platform-specific)
+- **Developer options:**
+  - Debug mode for troubleshooting
 
 ## Known Issues
 
