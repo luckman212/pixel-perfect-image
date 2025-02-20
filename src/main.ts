@@ -451,7 +451,7 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param menu - The context menu to add items to
 	 * @param ev - The original mouse event
 	 */
-	private async addResizeMenuItems(menu: Menu, ev: MouseEvent): Promise<void> {
+	private async addResizeMenuItems(menu: Menu, ev: MouseEvent | TouchEvent): Promise<void> {
 		const img = this.findImageElement(ev.target);
 		if (!img) return;
 
@@ -512,7 +512,7 @@ export default class PixelPerfectImage extends Plugin {
 				menu,
 				`Resize to ${percentage}%`,
 				'image',
-				async () => await this.resizeImage(ev, percentage),
+				async () => await this.resizeImage(img, percentage),
 				`Failed to resize image to ${percentage}%`,
 				currentScale === percentage
 			);
@@ -524,7 +524,7 @@ export default class PixelPerfectImage extends Plugin {
 				menu,
 				`Resize to ${this.settings.customResizeWidth}px`,
 				'image',
-				async () => await this.resizeImage(ev, this.settings.customResizeWidth, true),
+				async () => await this.resizeImage(img, this.settings.customResizeWidth, true),
 				`Failed to resize image to ${this.settings.customResizeWidth}px`,
 				currentWidth === this.settings.customResizeWidth
 			);
@@ -642,16 +642,11 @@ export default class PixelPerfectImage extends Plugin {
 
 	/**
 	 * Resizes an image in the editor by updating its wikilink width parameter.
-	 * @param ev - Mouse event containing the target image
+	 * @param img - The HTML image element
 	 * @param size - Either a percentage (e.g. 50) or absolute width in pixels (e.g. 600)
 	 * @param isAbsolute - If true, size is treated as pixels, otherwise as percentage
 	 */
-	private async resizeImage(ev: MouseEvent, size: number, isAbsolute = false) {
-		const img = this.findImageElement(ev.target);
-		if (!img) {
-			throw new Error("Could not find the image element");
-		}
-
+	private async resizeImage(img: HTMLImageElement, size: number, isAbsolute = false) {
 		const result = await this.getImageFileWithErrorHandling(img);
 		if (!result) {
 			throw new Error("Could not find the image file");
@@ -1015,20 +1010,24 @@ export default class PixelPerfectImage extends Plugin {
 	 * @returns The extracted filename or null if not found
 	 */
 	private parseFileNameFromSrc(src: string): string | null {
-		// Split off any query params (?xyz=...)
-		const [pathWithoutQuery] = src.split("?");
-		const slashIdx = pathWithoutQuery.lastIndexOf("/");
-		if (slashIdx < 0 || slashIdx >= pathWithoutQuery.length - 1) {
+		try {
+			// Handle both URL-encoded and regular paths
+			const decodedSrc = decodeURIComponent(src);
+			
+			// Split off any query params (?xyz=...)
+			const [pathWithoutQuery] = decodedSrc.split("?");
+			const slashIdx = pathWithoutQuery.lastIndexOf("/");
+			if (slashIdx < 0 || slashIdx >= pathWithoutQuery.length - 1) {
+				return null;
+			}
+
+			// Extract just the trailing filename portion
+			return pathWithoutQuery.substring(slashIdx + 1);
+		} catch (error) {
+			// Handle malformed URLs gracefully
+			this.debugLog('Error parsing src:', error);
 			return null;
 		}
-
-		// Extract just the trailing filename portion
-		let fileName = pathWithoutQuery.substring(slashIdx + 1);
-
-		// Decode "%20" and other URL entities back into normal characters
-		fileName = decodeURIComponent(fileName);
-
-		return fileName;
 	}
 
 	// Platform & Debug Utilities
