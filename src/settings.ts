@@ -217,13 +217,12 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 				
 				slider
 					.setDynamicTooltip()
+					.setLimits(1, 100, 1)  // min: 1%, max: 100%, step: 1%
 					.setValue(this.plugin.settings.wheelZoomPercentage)
 					.onChange(async (value) => {
-						if (!isNaN(value) && value > 0) {
-							updateDisplay(value);
-							this.plugin.settings.wheelZoomPercentage = value;
-							await this.plugin.saveSettings();
-						}
+						updateDisplay(value);
+						this.plugin.settings.wheelZoomPercentage = value;
+						await this.plugin.saveSettings();
 					});
 				
 				updateDisplay(this.plugin.settings.wheelZoomPercentage);
