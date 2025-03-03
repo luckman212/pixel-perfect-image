@@ -10,7 +10,7 @@ export interface PixelPerfectImageSettings {
 	showOpenInNewTab: boolean;
 	showOpenInDefaultApp: boolean;
 	showResizeOptions: boolean;
-	customResizeWidth: number;  // in pixels (0 means disabled)
+	customResizeWidths: number[];  // in pixels (empty array means disabled)
 
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
@@ -35,7 +35,7 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	showOpenInNewTab: true,
 	showOpenInDefaultApp: true,
 	showResizeOptions: true,
-	customResizeWidth: 0,  // disabled by default
+	customResizeWidths: [],  // disabled by default
 
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
@@ -138,14 +138,18 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Custom resize width")
-			.setDesc("Set a custom resize width in pixels (leave empty to disable)")
+			.setDesc("Set custom resize widths in pixels (comma-separated, e.g. 600,800,1200)")
 			.addText(text => {
 				text
-					.setPlaceholder("e.g., 600")
-					.setValue(this.plugin.settings.customResizeWidth ? String(this.plugin.settings.customResizeWidth) : "")
+					.setPlaceholder("e.g., 600,800,1200")
+					.setValue(this.plugin.settings.customResizeWidths.length > 0 ? this.plugin.settings.customResizeWidths.join(',') : "")
 					.onChange(async (value) => {
-						const width = parseInt(value);
-						this.plugin.settings.customResizeWidth = !isNaN(width) && width > 0 ? width : 0;
+						// Parse comma-separated values
+						const widths = value.split(',')
+							.map(part => parseInt(part.trim()))
+							.filter(width => !isNaN(width) && width > 0);
+						
+						this.plugin.settings.customResizeWidths = widths;
 						await this.plugin.saveSettings();
 					});
 			})

@@ -518,16 +518,18 @@ export default class PixelPerfectImage extends Plugin {
 			);
 		});
 
-		// Add custom resize option if set
-		if (this.settings.customResizeWidth > 0) {
-			this.addMenuItem(
-				menu,
-				`Resize to ${this.settings.customResizeWidth}px`,
-				'image',
-				async () => await this.resizeImage(img, this.settings.customResizeWidth, true),
-				`Failed to resize image to ${this.settings.customResizeWidth}px`,
-				currentWidth === this.settings.customResizeWidth
-			);
+		// Add custom resize options if set
+		if (this.settings.customResizeWidths.length > 0) {
+			this.settings.customResizeWidths.forEach(width => {
+				this.addMenuItem(
+					menu,
+					`Resize to ${width}px`,
+					'image',
+					async () => await this.resizeImage(img, width, true),
+					`Failed to resize image to ${width}px`,
+					currentWidth === width
+				);
+			});
 		}
 
 		// Add option to remove custom size if one is set
