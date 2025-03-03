@@ -488,9 +488,9 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to copy file path'
 		);
 
-		// Only show resize options if enabled in settings
-		if (!this.settings.showResizeOptions) {
-			this.debugLog('Skipping resize options - disabled in settings');
+		// Only show percentage resize options if enabled in settings
+		if (!this.settings.showPercentageResize) {
+			this.debugLog('Skipping percentage resize options - disabled in settings');
 			return;
 		}
 

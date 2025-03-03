@@ -9,7 +9,7 @@ export interface PixelPerfectImageSettings {
 	showRenameOption: boolean;
 	showOpenInNewTab: boolean;
 	showOpenInDefaultApp: boolean;
-	showResizeOptions: boolean;
+	showPercentageResize: boolean;
 	customResizeWidths: number[];  // in pixels (empty array means disabled)
 
 	// Mousewheel zoom settings
@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	showRenameOption: true,
 	showOpenInNewTab: true,
 	showOpenInDefaultApp: true,
-	showResizeOptions: true,
+	showPercentageResize: true,
 	customResizeWidths: [],  // disabled by default
 
 	// Mousewheel zoom defaults
@@ -127,12 +127,12 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 				}));
 
 		new Setting(containerEl)
-			.setName('Show resize options')
-			.setDesc('Show image resize options in the context menu')
+			.setName('Show percentage resize')
+			.setDesc('Show percentage resize options (100%, 50%, 25%) in the context menu')
 			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showResizeOptions)
+				.setValue(this.plugin.settings.showPercentageResize)
 				.onChange(async (value) => {
-					this.plugin.settings.showResizeOptions = value;
+					this.plugin.settings.showPercentageResize = value;
 					await this.plugin.saveSettings();
 				}));
 
