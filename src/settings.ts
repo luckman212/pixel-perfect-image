@@ -128,7 +128,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Show percentage resize')
-			.setDesc('Show percentage resize options (100%, 50%, 25%) in the context menu')
+			.setDesc('Show percentage resize options (100%, 50%, 25%) in the context menu. Custom sizes will always be shown if defined.')
 			.addToggle(toggle => toggle
 				.setValue(this.plugin.settings.showPercentageResize)
 				.onChange(async (value) => {

@@ -488,12 +488,6 @@ export default class PixelPerfectImage extends Plugin {
 			'Failed to copy file path'
 		);
 
-		// Only show percentage resize options if enabled in settings
-		if (!this.settings.showPercentageResize) {
-			this.debugLog('Skipping percentage resize options - disabled in settings');
-			return;
-		}
-
 		// Add separator before resize options
 		menu.addSeparator();
 
@@ -509,17 +503,19 @@ export default class PixelPerfectImage extends Plugin {
 			this.debugLog('Current image scale:', currentScale, 'width:', currentWidth);
 		}
 
-		// Add resize options
-		RESIZE_PERCENTAGES.forEach(percentage => {
-			this.addMenuItem(
-				menu,
-				`Resize to ${percentage}%`,
-				'image',
-				async () => await this.resizeImage(img, percentage),
-				`Failed to resize image to ${percentage}%`,
-				currentScale === percentage
-			);
-		});
+		// Add percentage resize options if enabled in settings
+		if (this.settings.showPercentageResize) {
+			RESIZE_PERCENTAGES.forEach(percentage => {
+				this.addMenuItem(
+					menu,
+					`Resize to ${percentage}%`,
+					'image',
+					async () => await this.resizeImage(img, percentage),
+					`Failed to resize image to ${percentage}%`,
+					currentScale === percentage
+				);
+			});
+		}
 
 		// Add custom resize options if set
 		if (this.settings.customResizeWidths.length > 0) {
