@@ -337,7 +337,10 @@ export default class PixelPerfectImage extends Plugin {
 		// Helper to parse width from parameters
 		const parseWidth = (pipeParams: string[]): number | null => {
 			if (pipeParams.length === 0) return null;
-			const width = parseInt(pipeParams[0]);
+			
+			// Check the last parameter for a number (width)
+			const lastParam = pipeParams[pipeParams.length - 1];
+			const width = parseInt(lastParam);
 			return isNaN(width) ? null : width;
 		};
 
@@ -925,7 +928,20 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param newWidth - The new width to set in pixels
 	 */
 	private async updateImageLinkWidth(imageFile: TFile, newWidth: number) {
-		const didChange = await this.updateImageLinks(imageFile, (_) => [String(newWidth)]);
+		const didChange = await this.updateImageLinks(imageFile, (params) => {
+			// Check if the last parameter is a number (likely a width)
+			const lastParam = params.length > 0 ? params[params.length - 1] : null;
+			const lastParamIsNumber = lastParam !== null && !isNaN(parseInt(lastParam));
+			
+			if (lastParamIsNumber) {
+				// Replace just the last parameter (width) and keep all other attributes
+				return [...params.slice(0, params.length - 1), String(newWidth)];
+			} else {
+				// No existing width, so append the new width while preserving all attributes
+				return [...params, String(newWidth)];
+			}
+		});
+		
 		if (didChange) {
 			this.debugLog(`Updated image size to ${newWidth}px`);
 		}
@@ -936,7 +952,20 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param imageFile - The image file being referenced
 	 */
 	private async removeImageWidth(imageFile: TFile) {
-		const didChange = await this.updateImageLinks(imageFile, (_) => []);
+		const didChange = await this.updateImageLinks(imageFile, (params) => {
+			// Check if the last parameter is a number (likely a width)
+			const lastParam = params.length > 0 ? params[params.length - 1] : null;
+			const lastParamIsNumber = lastParam !== null && !isNaN(parseInt(lastParam));
+			
+			if (lastParamIsNumber) {
+				// Remove just the last parameter (width) and keep all other attributes
+				return params.slice(0, params.length - 1);
+			} else {
+				// No width parameter found, return unchanged
+				return params;
+			}
+		});
+		
 		if (didChange) {
 			this.debugLog('Removed custom size from image');
 		}
