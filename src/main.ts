@@ -169,8 +169,11 @@ export default class PixelPerfectImage extends Plugin {
 		// Use the custom width if set, otherwise use original width
 		const currentWidth = customWidth ?? width;
 		
-		// Calculate step size based on the zoom percentage setting
-		const stepSize = Math.max(1, Math.round(currentWidth * (this.settings.wheelZoomPercentage / 100)));
+		// Calculate scale factor based on delta magnitude (smaller deltas = smaller changes)
+		const deltaScale = Math.min(1.0, Math.abs(evt.deltaY) / 10);
+		
+		// Apply the scale factor to the base step size
+		const stepSize = Math.max(1, Math.round(currentWidth * (this.settings.wheelZoomPercentage / 100) * deltaScale));
 		
 		// Adjust width based on scroll direction
 		const scrollingUp = evt.deltaY < 0;
@@ -202,13 +205,6 @@ export default class PixelPerfectImage extends Plugin {
 		this.debouncedHandleImageWheel = debounce(
 			async (ev: WheelEvent, img: HTMLImageElement) => {
 				try {
-					// Check if this is a trackpad event and adjust debounce dynamically if needed
-					// Small deltaY values (< 10) typically indicate precision devices like trackpads
-					const isTrackpad = Math.abs(ev.deltaY) < 10;
-					if (isTrackpad) {
-						// Apply higher debounce time for trackpads to slow down resize rate
-						await new Promise(resolve => setTimeout(resolve, this.settings.wheelZoomDebounceTime));
-					}
 					await this.handleImageWheel(ev, img);
 				} catch (error) {
 					this.errorLog('Error handling wheel event:', error);
