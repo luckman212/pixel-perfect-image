@@ -249,7 +249,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Trackpad sensitivity")
-			.setDesc("Adjust debounce time for wheel events (higher values slow down trackpad resizing speed)")
+			.setDesc("Adjust debounce time for wheel events (higher values slow down trackpad resizing speed on all platforms)")
 			.addExtraButton(button => {
 				button
 					.setIcon("reset")
