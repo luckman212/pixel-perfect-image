@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	wheelModifierKey: 'Alt',
 	wheelZoomPercentage: 20,
 	invertScrollDirection: false,
-	wheelZoomDebounceTime: 50, // 50ms default debounce time
+	wheelZoomDebounceTime: 50, // 50ms default debounce time (additional delay applied for trackpad)
 
 	// External editor defaults
 	externalEditorName: "",
@@ -249,7 +249,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName("Trackpad sensitivity")
-			.setDesc("Adjust debounce time for wheel events (higher values help with trackpad sensitivity issues)")
+			.setDesc("Adjust debounce time for wheel events (higher values slow down trackpad resizing speed)")
 			.addExtraButton(button => {
 				button
 					.setIcon("reset")

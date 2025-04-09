@@ -202,6 +202,12 @@ export default class PixelPerfectImage extends Plugin {
 		this.debouncedHandleImageWheel = debounce(
 			async (ev: WheelEvent, img: HTMLImageElement) => {
 				try {
+					// Check if this is a trackpad event and adjust debounce dynamically if needed
+					const isMacTrackpad = Platform.isMacOS && Math.abs(ev.deltaY) < 10;
+					if (isMacTrackpad) {
+						// Apply higher debounce time for Mac trackpad to slow down resize rate
+						await new Promise(resolve => setTimeout(resolve, this.settings.wheelZoomDebounceTime));
+					}
 					await this.handleImageWheel(ev, img);
 				} catch (error) {
 					this.errorLog('Error handling wheel event:', error);
