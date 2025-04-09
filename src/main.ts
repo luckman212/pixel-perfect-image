@@ -30,16 +30,11 @@ export default class PixelPerfectImage extends Plugin {
 	private dimensionCache = new Map<string, { width: number; height: number }>();
 	private isModifierKeyHeld = false;
 	private wheelEventCleanup: (() => void) | null = null;
-	/** Debounced version of handleImageWheel to prevent excessive processing on trackpads */
-	private debouncedHandleImageWheel: (ev: WheelEvent, img: HTMLImageElement) => void;
 
 	async onload() {
 		await this.loadSettings();
 		this.addSettingTab(new PixelPerfectImageSettingTab(this.app, this));
 		this.registerImageContextMenu();
-		
-		// Initialize the debounced handler with current settings
-		this.updateDebouncedHandler();
 		
 		// Add click handler for CMD/CTRL + click
 		this.registerDomEvent(document, 'click', this.handleImageClick.bind(this));
@@ -95,7 +90,7 @@ export default class PixelPerfectImage extends Plugin {
 		};
 
 		// Create bound event handler for cleanup
-		const wheelHandler = (ev: WheelEvent) => {
+		const wheelHandler = async (ev: WheelEvent) => {
 			// If zoom is not enabled or modifier not held, let default scroll happen
 			if (!this.settings.enableWheelZoom || !this.isModifierKeyHeld) return;
 
@@ -111,8 +106,13 @@ export default class PixelPerfectImage extends Plugin {
 			// Prevent default immediately when we'll handle the zoom
 			ev.preventDefault();
 			
-			// Use the debounced handler instead of direct call
-			this.debouncedHandleImageWheel(ev, img);
+			// Call handleImageWheel directly
+			try {
+				await this.handleImageWheel(ev, img);
+			} catch (error) {
+				this.errorLog('Error handling wheel event:', error);
+				new Notice('Failed to resize image');
+			}
 		};
 
 		// Register all event handlers with non-passive wheel listener
@@ -190,30 +190,10 @@ export default class PixelPerfectImage extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		// Update the debounced handler when settings are loaded
-		this.updateDebouncedHandler();
 	}
 
 	async saveSettings() {
 		await this.saveData(this.settings);
-		// Update the debounced handler when settings are saved
-		this.updateDebouncedHandler();
-	}
-
-	// Update the debounced handler when settings change
-	private updateDebouncedHandler() {
-		this.debouncedHandleImageWheel = debounce(
-			async (ev: WheelEvent, img: HTMLImageElement) => {
-				try {
-					await this.handleImageWheel(ev, img);
-				} catch (error) {
-					this.errorLog('Error handling wheel event:', error);
-					new Notice('Failed to resize image');
-				}
-			}, 
-			this.settings.wheelZoomDebounceTime,
-			true // Leading edge execution to feel more responsive
-		);
 	}
 
 	// Context Menu Handlers

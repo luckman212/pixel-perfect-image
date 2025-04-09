@@ -17,7 +17,6 @@ export interface PixelPerfectImageSettings {
 	wheelModifierKey: 'Alt' | 'Ctrl' | 'Shift';
 	wheelZoomPercentage: number;
 	invertScrollDirection: boolean;
-	wheelZoomDebounceTime: number; // in milliseconds
 
 	// External editor settings
 	externalEditorName: string;
@@ -43,7 +42,6 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	wheelModifierKey: 'Alt',
 	wheelZoomPercentage: 20,
 	invertScrollDirection: false,
-	wheelZoomDebounceTime: 50, // 50ms default debounce time (additional delay applied for trackpad)
 
 	// External editor defaults
 	externalEditorName: "",
@@ -245,43 +243,6 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 						this.plugin.settings.invertScrollDirection = value;
 						await this.plugin.saveSettings();
 					});
-			});
-
-		new Setting(containerEl)
-			.setName("Trackpad sensitivity")
-			.setDesc("Adjust debounce time for wheel events (higher values slow down trackpad resizing speed on all platforms)")
-			.addExtraButton(button => {
-				button
-					.setIcon("reset")
-					.setTooltip("Reset to default")
-					.onClick(async () => {
-						this.plugin.settings.wheelZoomDebounceTime = DEFAULT_SETTINGS.wheelZoomDebounceTime;
-						await this.plugin.saveSettings();
-						this.display();
-					});
-			})
-			.addSlider(slider => {
-				const valueDisplay = createSpan();
-				valueDisplay.style.minWidth = "3em";
-				valueDisplay.style.textAlign = "right";
-				valueDisplay.style.marginRight = "1em";
-				
-				const updateDisplay = (value: number) => {
-					valueDisplay.setText(`${value}ms`);
-				};
-				
-				slider
-					.setDynamicTooltip()
-					.setLimits(0, 200, 10)  // min: 0ms, max: 200ms, step: 10ms
-					.setValue(this.plugin.settings.wheelZoomDebounceTime)
-					.onChange(async (value) => {
-						updateDisplay(value);
-						this.plugin.settings.wheelZoomDebounceTime = value;
-						await this.plugin.saveSettings();
-					});
-				
-				updateDisplay(this.plugin.settings.wheelZoomDebounceTime);
-				slider.sliderEl.parentElement?.prepend(valueDisplay);
 			});
 
 		new Setting(containerEl)
