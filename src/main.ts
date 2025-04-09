@@ -235,6 +235,9 @@ export default class PixelPerfectImage extends Plugin {
 		let isLongPress = false;
 		
 		this.registerDomEvent(document, 'touchstart', (ev: TouchEvent) => {
+			// Ignore multi-touch events to avoid interfering with pinch zooming
+			if (ev.touches.length > 1) return;
+			
 			const img = this.findImageElement(ev.target);
 			if (!img) return;
 			
@@ -255,6 +258,9 @@ export default class PixelPerfectImage extends Plugin {
 	}
 
 	private async handleContextMenu(ev: MouseEvent | TouchEvent) {
+		// For touch events, ignore multi-touch to prevent triggering during pinch zoom
+		if ('touches' in ev && ev.touches.length > 1) return;
+		
 		const img = this.findImageElement(ev.target);
 		if (!img) return;
 
