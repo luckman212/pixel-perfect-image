@@ -395,7 +395,16 @@ export default class PixelPerfectImage extends Plugin {
 				// Split description and parameters
 				let [desc, ...pipeParams] = description.split("|");
 				
-				const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, activeFile.path);
+				// Decode URL-encoded paths before resolving
+				let decodedPath = linkPath;
+				try {
+					decodedPath = decodeURIComponent(linkPath);
+				} catch (e) {
+					// If decoding fails, use the original path
+					this.debugLog('Failed to decode URI component:', e);
+				}
+				
+				const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(decodedPath, activeFile.path);
 				if (resolvedFile?.path === imageFile.path) {
 					const width = parseWidth(pipeParams);
 					if (width !== null) {
@@ -799,7 +808,8 @@ export default class PixelPerfectImage extends Plugin {
 			// Combine description with new parameters
 			const newDescription = link.params.length > 0 ? [desc, ...link.params].join("|") : desc;
 			// For markdown links, we put parameters in the description and keep the URL clean
-			return `![${newDescription}](${this.buildLinkPath({...link, params: []})})`;
+			// Pass true to encode spaces in the path
+			return `![${newDescription}](${this.buildLinkPath({...link, params: []}, true)})`;
 		});
 	}
 
@@ -826,7 +836,18 @@ export default class PixelPerfectImage extends Plugin {
 	private parseLinkComponents(mainPart: string, linkPath?: string): ImageLink {
 		// For markdown links, pathToParse is the URL in parentheses
 		// For wiki links, pathToParse is the entire link content
-		const pathToParse = linkPath ?? mainPart;
+		let pathToParse = linkPath ?? mainPart;
+		
+		// Decode URL-encoded paths (e.g., %20 -> space) for markdown links
+		// This is necessary because markdown links often have URL-encoded paths
+		if (linkPath) {
+			try {
+				pathToParse = decodeURIComponent(pathToParse);
+			} catch (e) {
+				// If decoding fails, use the original path
+				this.debugLog('Failed to decode URI component:', e);
+			}
+		}
 
 		// Split off any heading reference (#) from the path
 		// e.g., "image.png#heading" → ["image.png", "heading"]
@@ -839,8 +860,11 @@ export default class PixelPerfectImage extends Plugin {
 		// e.g., "image.png|100" → ["image.png", "100"]
 		const [path, ...params] = (linkPath ? mainPart : pathWithoutHash).split("|");
 		
+		// Decode the final path for markdown links
+		let finalPath = linkPath ? pathWithoutHash : path;
+		
 		return {
-			path: linkPath ?? path,  // For markdown links, use the URL part; for wiki links, use the path part
+			path: finalPath,         // Decoded path for proper file resolution
 			hash,                    // Any heading reference (#) found
 			params,                  // Array of parameters (e.g., width)
 			isWikiStyle: !linkPath   // If linkPath is undefined, it's a wiki-style link
@@ -864,14 +888,24 @@ export default class PixelPerfectImage extends Plugin {
 	 * @param link - The ImageLink object containing path, parameters, and hash
 	 * @returns The reconstructed link path with parameters and hash (if any)
 	 */
-	private buildLinkPath(link: ImageLink): string {
+	private buildLinkPath(link: ImageLink, encode = false): string {
 		// Join parameters with | if there are any
 		// e.g., params ["100", "left"] becomes "|100|left"
 		const paramsStr = link.params.length > 0 ? `|${link.params.join("|")}` : "";
 
+		// For markdown links, we may need to encode the path
+		let finalPath = link.path;
+		if (encode) {
+			// Properly encode the path for markdown links
+			// We need to encode the path but preserve the directory separators
+			// This handles spaces, parentheses, brackets, and other special characters
+			// e.g., "Images & Files/my image (1).png" → "Images%20%26%20Files/my%20image%20(1).png"
+			finalPath = link.path.split('/').map(segment => encodeURIComponent(segment)).join('/');
+		}
+
 		// Combine path + parameters + hash
 		// e.g., "image.png" + "|100|left" + "#heading"
-		return `${link.path}${paramsStr}${link.hash}`;
+		return `${finalPath}${paramsStr}${link.hash}`;
 	}
 
 	/**
