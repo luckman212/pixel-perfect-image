@@ -4,6 +4,10 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ![Screenshot](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot1.png?raw=true)
 
+[❤️ Sponsor on GitHub](https://github.com/sponsors/johansan)
+
+If you love using Notebook Navigator, please consider supporting its continued development.
+
 ## Features
 
 - 📐 **Pixel perfect resize:** Quickly resize images to pixel perfect percentages (100%, 50%, 25%) or custom widths in pixels
@@ -16,12 +20,6 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 - ✏️ **Rename images:** Quickly rename image files right from the context menu
 - 🔄 **Works with both Wikilinks and standard Markdown image links**
 - 🔍 **Quick open in new tab:** CMD/CTRL + click to open image in new tab
-
-## Support Development
-
-[❤️ Sponsor on GitHub](https://github.com/sponsors/johansan)
-
-If you love using Notebook Navigator, please consider supporting its continued development.
 
 ## How to Use
 
