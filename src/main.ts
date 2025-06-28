@@ -44,8 +44,6 @@ export default class PixelPerfectImage extends Plugin {
 			this.app.workspace.on("layout-change", () => this.registerWheelEvents(window))
 		);
 		this.registerWheelEvents(window);
-
-		this.debugLog('Plugin loaded');
 	}
 
 	onunload() {
@@ -409,7 +407,6 @@ export default class PixelPerfectImage extends Plugin {
 					decodedPath = decodeURIComponent(linkPath);
 				} catch (e) {
 					// If decoding fails, use the original path
-					this.debugLog('Failed to decode URI component:', e);
 				}
 				
 				const resolvedFile = this.app.metadataCache.getFirstLinkpathDest(decodedPath, activeFile.path);
@@ -462,7 +459,9 @@ export default class PixelPerfectImage extends Plugin {
 				await action();
 			} catch (error) {
 				this.errorLog(errorMessage, error);
-				new Notice(errorMessage);
+				// Use the actual error message if available, otherwise fall back to the generic message
+				const displayMessage = error instanceof Error ? error.message : errorMessage;
+				new Notice(displayMessage);
 			}
 		};
 	}
@@ -544,7 +543,6 @@ export default class PixelPerfectImage extends Plugin {
 			const { width } = await this.readImageDimensions(result.imgFile);
 			currentWidth = this.getCurrentImageWidth(img, result.activeFile, result.imgFile);
 			currentScale = currentWidth !== null ? Math.round((currentWidth / width) * 100) : null;
-			this.debugLog('Current image scale:', currentScale, 'width:', currentWidth);
 		}
 
 		// Add percentage resize options if enabled in settings
@@ -758,6 +756,10 @@ export default class PixelPerfectImage extends Plugin {
 			await navigator.clipboard.write([item]);
 		} catch (error) {
 			this.errorLog('Copy to clipboard failed:', error);
+			// Check if it's a focus error and throw a more helpful message
+			if (error instanceof Error && error.message.includes('Document is not focused')) {
+				throw new Error('Please click in the editor first, then try copying again');
+			}
 			throw error;
 		}
 	}
@@ -853,7 +855,6 @@ export default class PixelPerfectImage extends Plugin {
 				pathToParse = decodeURIComponent(pathToParse);
 			} catch (e) {
 				// If decoding fails, use the original path
-				this.debugLog('Failed to decode URI component:', e);
 			}
 		}
 
@@ -1008,7 +1009,6 @@ export default class PixelPerfectImage extends Plugin {
 		});
 		
 		if (didChange) {
-			this.debugLog(`Updated image size to ${newWidth}px`);
 		}
 	}
 
@@ -1032,7 +1032,6 @@ export default class PixelPerfectImage extends Plugin {
 		});
 		
 		if (didChange) {
-			this.debugLog('Removed custom size from image');
 		}
 	}
 
@@ -1121,7 +1120,6 @@ export default class PixelPerfectImage extends Plugin {
 			return pathWithoutQuery.substring(slashIdx + 1);
 		} catch (error) {
 			// Handle malformed URLs gracefully
-			this.debugLog('Error parsing src:', error);
 			return null;
 		}
 	}
@@ -1129,16 +1127,6 @@ export default class PixelPerfectImage extends Plugin {
 	// Platform & Debug Utilities
 	// --------------------------
 
-	/**
-	 * Logs debug messages when debug mode is enabled in settings.
-	 * @param args - Arguments to log
-	 */
-	private debugLog(...args: any[]) {
-		if (this.settings.debugMode) {
-			const timestamp = new Date().toTimeString().split(' ')[0];
-			console.log(`${timestamp}`, ...args);
-		}
-	}
 
 	/**
 	 * Logs error messages with timestamp.
@@ -1197,7 +1185,6 @@ export default class PixelPerfectImage extends Plugin {
 				this.errorLog(`Error launching ${editorName}:`, error);
 				new Notice(`Could not open file in ${editorName}.`);
 			} else {
-				this.debugLog(`Launched ${editorName}:`, cmd);
 			}
 		});
 	}
@@ -1247,7 +1234,6 @@ export default class PixelPerfectImage extends Plugin {
 			.then(result => {
 				if (result) {
 					this.app.workspace.openLinkText(result.imgFile.path, '', true);
-					this.debugLog('Opening image in new tab:', result.imgFile.path);
 				}
 			})
 			.catch(error => {
