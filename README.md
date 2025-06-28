@@ -19,8 +19,9 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 ## Support Development
 
-If you love using Notebook Navigator, please consider supporting its continued development.
 [❤️ Sponsor on GitHub](https://github.com/sponsors/johansan)
+
+If you love using Notebook Navigator, please consider supporting its continued development.
 
 ## How to Use
 
