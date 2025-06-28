@@ -56,7 +56,6 @@ export default class PixelPerfectImage extends Plugin {
 
 	private setModifierKeyState(isHeld: boolean) {
 		this.isModifierKeyHeld = isHeld;
-		this.debugLog(`Modifier key ${isHeld ? 'pressed' : 'released'}`);
 	}
 
 	private registerWheelEvents(currentWindow: Window) {
@@ -124,7 +123,6 @@ export default class PixelPerfectImage extends Plugin {
 		// Store cleanup function
 		this.wheelEventCleanup = () => {
 			doc.removeEventListener("wheel", wheelHandler);
-			this.debugLog('Wheel events cleaned up');
 		};
 	}
 
