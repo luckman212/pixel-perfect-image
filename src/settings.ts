@@ -154,10 +154,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 					});
 			})
 			.addText(text => {
-				text.inputEl.style.width = "30px";
-				text.inputEl.style.textAlign = "left";
-				text.inputEl.style.border = "none";
-				text.inputEl.style.backgroundColor = "transparent";
+				text.inputEl.addClass('pixel-perfect-px-suffix');
 				text.setValue("px");
 				text.setDisabled(true);
 			});
@@ -211,9 +208,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			})
 			.addSlider(slider => {
 				const valueDisplay = createSpan();
-				valueDisplay.style.minWidth = "2.5em";
-				valueDisplay.style.textAlign = "right";
-				valueDisplay.style.marginRight = "1em";
+				valueDisplay.addClass('pixel-perfect-zoom-value');
 				
 				const updateDisplay = (value: number) => {
 					valueDisplay.setText(`${value}%`);

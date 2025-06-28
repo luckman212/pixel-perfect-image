@@ -114,15 +114,25 @@ export default class PixelPerfectImage extends Plugin {
 			}
 		};
 
-		// Register all event handlers with non-passive wheel listener
+		// Register all event handlers
 		this.registerDomEvent(doc, "keydown", keydownHandler);
 		this.registerDomEvent(doc, "keyup", keyupHandler);
 		this.registerDomEvent(window, "blur", blurHandler);
-		doc.addEventListener("wheel", wheelHandler, { passive: false });
-
-		// Store cleanup function
+		
+		// For wheel event, we need passive: false to prevent scrolling
+		// Store the handler and cleanup function for manual management
+		const wheelEventController = new AbortController();
+		doc.addEventListener("wheel", wheelHandler, { 
+			passive: false,
+			signal: wheelEventController.signal 
+		});
+		
+		// Register cleanup via Obsidian's register method
+		this.register(() => wheelEventController.abort());
+		
+		// Store cleanup function for re-registration scenarios
 		this.wheelEventCleanup = () => {
-			doc.removeEventListener("wheel", wheelHandler);
+			wheelEventController.abort();
 		};
 	}
 
@@ -1261,23 +1271,21 @@ class FileNameInputModal extends Modal {
 	onOpen() {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.style.padding = '0.8em 1.2em'; // Reduce padding
+		contentEl.addClass('pixel-perfect-rename-modal');
 
 		contentEl.createEl("h2", { 
 			text: "Rename image",
-			cls: 'modal-title' // Add class for consistency
-		}).style.marginTop = '0'; // Remove top margin
+			cls: 'modal-title'
+		});
 
 		const form = contentEl.createEl("form");
-		form.style.display = "flex";
-		form.style.flexDirection = "column";
-		form.style.gap = "0.8em";
+		form.addClass('pixel-perfect-rename-form');
 
 		const input = form.createEl("input", {
 			type: "text",
-			value: this.originalName
+			value: this.originalName,
+			cls: 'pixel-perfect-rename-input'
 		});
-		input.style.width = "100%";
 		
 		// Select filename without extension
 		const lastDotIndex = this.originalName.lastIndexOf('.');
@@ -1287,10 +1295,7 @@ class FileNameInputModal extends Modal {
 		}
 
 		const buttonContainer = form.createDiv();
-		buttonContainer.style.display = "flex";
-		buttonContainer.style.justifyContent = "flex-end";
-		buttonContainer.style.gap = "0.8em";
-		buttonContainer.style.marginTop = "0.4em";
+		buttonContainer.addClass('pixel-perfect-button-container');
 
 		const submitButton = buttonContainer.createEl("button", { 
 			text: "Rename",
