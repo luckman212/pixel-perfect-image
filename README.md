@@ -6,7 +6,7 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 
 [❤️ Sponsor on GitHub](https://github.com/sponsors/johansan)
 
-If you love using Notebook Navigator, please consider supporting its continued development.
+If you love using Pixel Perfect Image, please consider supporting its continued development.
 
 ## Features
 
