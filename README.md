@@ -2,8 +2,6 @@
 
 A plugin for [Obsidian](https://obsidian.md) that helps you manage images in your notes. Right-click any image to view its details, resize it to exact pixel dimensions, or perform file operations like copying to clipboard or opening in external editors like Photoshop or Affinity Photo.
 
-## Screenshot
-
 ![Screenshot](https://github.com/johansan/pixel-perfect-image/blob/main/images/screenshot1.png?raw=true)
 
 ## Features
@@ -22,7 +20,6 @@ A plugin for [Obsidian](https://obsidian.md) that helps you manage images in you
 ## Support Development
 
 If you love using Notebook Navigator, please consider supporting its continued development.
-
 [❤️ Sponsor on GitHub](https://github.com/sponsors/johansan)
 
 ## How to Use
