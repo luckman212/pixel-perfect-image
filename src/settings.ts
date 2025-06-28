@@ -11,6 +11,7 @@ export interface PixelPerfectImageSettings {
 	showOpenInDefaultApp: boolean;
 	showPercentageResize: boolean;
 	customResizeWidths: number[];  // in pixels (empty array means disabled)
+	cmdCtrlClickBehavior: 'open-in-new-tab' | 'open-in-default-app';
 
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
@@ -36,6 +37,7 @@ export const DEFAULT_SETTINGS: PixelPerfectImageSettings = {
 	showOpenInDefaultApp: true,
 	showPercentageResize: true,
 	customResizeWidths: [],  // disabled by default
+	cmdCtrlClickBehavior: 'open-in-new-tab',
 
 	// Mousewheel zoom defaults
 	enableWheelZoom: true,
@@ -159,6 +161,19 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 				text.setDisabled(true);
 			});
 
+		const cmdKey = Platform.isMacOS ? 'CMD' : 'CTRL';
+		new Setting(containerEl)
+			.setName(`${cmdKey} + click behavior`)
+			.setDesc(`Choose what happens when you ${cmdKey} + click an image`)
+			.addDropdown(dropdown => dropdown
+				.addOption('open-in-new-tab', 'Open in new tab')
+				.addOption('open-in-default-app', 'Open in default app')
+				.setValue(this.plugin.settings.cmdCtrlClickBehavior)
+				.onChange(async (value: 'open-in-new-tab' | 'open-in-default-app') => {
+					this.plugin.settings.cmdCtrlClickBehavior = value;
+					await this.plugin.saveSettings();
+				}));
+
 	
 		// Mousewheel zoom section
 		new Setting(containerEl)
@@ -259,8 +274,8 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 
 		if (Platform.isMacOS) {
 			new Setting(containerEl)
-				.setName("External editor path (MacOS)")
-				.setDesc("Full path to your external editor application on MacOS")
+				.setName("External editor path (macOS)")
+				.setDesc("Full path to your external editor application on macOS")
 				.addText(text => {
 					text
 						.setPlaceholder("/Applications/Adobe Photoshop 2025/Adobe Photoshop 2025.app")

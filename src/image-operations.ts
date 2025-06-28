@@ -39,9 +39,6 @@ export async function updateImageLinkWidth(this: PixelPerfectImage, imageFile: T
 			return [...params, String(newWidth)];
 		}
 	});
-	
-	if (didChange) {
-	}
 }
 
 /**
@@ -62,9 +59,6 @@ export async function removeImageWidth(this: PixelPerfectImage, imageFile: TFile
 			return params;
 		}
 	});
-	
-	if (didChange) {
-	}
 }
 
 /**

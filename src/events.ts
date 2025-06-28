@@ -145,7 +145,7 @@ export async function handleImageWheel(this: PixelPerfectImage, evt: WheelEvent,
 }
 
 /**
- * Handles click events on images, opening them in a new tab when CMD/CTRL is pressed
+ * Handles click events on images, performing the configured action when CMD/CTRL is pressed
  */
 export function handleImageClick(this: PixelPerfectImage, ev: MouseEvent): void {
 	// Check if CMD (Mac) or CTRL (Windows/Linux) is held
@@ -157,15 +157,22 @@ export function handleImageClick(this: PixelPerfectImage, ev: MouseEvent): void 
 	// Prevent default click behavior
 	ev.preventDefault();
 
-	// Get the image file and open in new tab
+	// Get the image file and perform the configured action
 	this.getImageFileWithErrorHandling(img)
 		.then((result: { activeFile: TFile; imgFile: TFile } | null) => {
 			if (result) {
-				this.app.workspace.openLinkText(result.imgFile.path, '', true);
+				if (this.settings.cmdCtrlClickBehavior === 'open-in-new-tab') {
+					this.app.workspace.openLinkText(result.imgFile.path, '', true);
+				} else if (this.settings.cmdCtrlClickBehavior === 'open-in-default-app') {
+					this.openInDefaultApp(result.imgFile);
+				}
 			}
 		})
 		.catch((error: any) => {
-			errorLog('Failed to open image in new tab:', error);
-			new Notice('Failed to open image in new tab');
+			const action = this.settings.cmdCtrlClickBehavior === 'open-in-new-tab' 
+				? 'open image in new tab' 
+				: 'open image in default app';
+			errorLog(`Failed to ${action}:`, error);
+			new Notice(`Failed to ${action}`);
 		});
 }

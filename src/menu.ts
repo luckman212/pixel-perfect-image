@@ -171,7 +171,7 @@ export async function addResizeMenuItems(this: PixelPerfectImage, menu: Menu, ev
 	addMenuItem.call(
 		this,
 		menu,
-		'Copy Image',
+		'Copy image',
 		'copy',
 		async () => {
 			await this.copyImageToClipboard(img);
@@ -184,7 +184,7 @@ export async function addResizeMenuItems(this: PixelPerfectImage, menu: Menu, ev
 	addMenuItem.call(
 		this,
 		menu,
-		'Copy Local Path',
+		'Copy local path',
 		'link',
 		async () => {
 			const result = await this.getImageFileWithErrorHandling(img);
@@ -248,7 +248,7 @@ export async function addResizeMenuItems(this: PixelPerfectImage, menu: Menu, ev
 		addMenuItem.call(
 			this,
 			menu,
-			'Remove Custom Size',
+			'Remove custom size',
 			'reset',
 			async () => {
 				await this.removeImageWidth(result.imgFile);
@@ -289,7 +289,7 @@ export function addFileOperationMenuItems(this: PixelPerfectImage, menu: Menu, t
 		addMenuItem.call(
 			this,
 			menu,
-			'Rename Image',
+			'Rename image',
 			'pencil',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
@@ -310,7 +310,7 @@ export function addFileOperationMenuItems(this: PixelPerfectImage, menu: Menu, t
 		addMenuItem.call(
 			this,
 			menu,
-			'Open in New Tab',
+			'Open in new tab',
 			'link-2',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
@@ -326,7 +326,7 @@ export function addFileOperationMenuItems(this: PixelPerfectImage, menu: Menu, t
 		addMenuItem.call(
 			this,
 			menu,
-			'Open in Default app',
+			'Open in default app',
 			'image',
 			async () => {
 				const result = await this.getImageFileWithErrorHandling(target);
