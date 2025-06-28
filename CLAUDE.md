@@ -128,3 +128,87 @@ pixel-perfect-image/
 - Validate all file paths before operations
 - Use Obsidian's safe file APIs
 - Sanitize user inputs for custom resize widths
+
+## Obsidian Plugin Guidelines
+
+### Type Safety Requirements
+Per Obsidian's plugin review guidelines, type casting with `as` should be avoided for Obsidian file types. Instead, use `instanceof` checks or type guard functions:
+
+❌ **Don't use type assertions:**
+```typescript
+// Bad - will fail Obsidian review
+const file = item.data as TFile;
+const folder = item.data as TFolder;
+```
+
+✅ **Do use instanceof checks:**
+```typescript
+// Good - using instanceof directly
+if (item.data instanceof TFile) {
+    // item.data is now safely typed as TFile
+    console.log(item.data.path);
+}
+```
+
+### Style Requirements
+Per Obsidian's plugin review guidelines, inline styles should be avoided. All styles should be defined in CSS files to allow themes and snippets to customize the appearance.
+
+❌ **Don't use inline styles:**
+```javascript
+// Bad - will fail Obsidian review
+element.style.backgroundColor = '#dc3545';
+element.style.position = 'absolute';
+```
+
+✅ **Do use CSS classes:**
+```javascript
+// Good - define styles in CSS
+element.addClass('pixel-perfect-rename-modal');
+```
+
+### File Deletion Requirements
+Per Obsidian's plugin review guidelines, use `app.fileManager.trashFile()` instead of `app.vault.delete()` for file deletion:
+
+❌ **Don't use vault.delete:**
+```typescript
+// Bad - will fail Obsidian review
+await this.app.vault.delete(file);
+```
+
+✅ **Do use fileManager.trashFile:**
+```typescript
+// Good - respects user's trash preferences
+await this.app.fileManager.trashFile(file);
+```
+
+### UI Text Letter Casing Convention
+All UI text should use sentence case (only first letter capitalized) for consistency and readability:
+
+❌ **Don't use Title Case or ALL CAPS:**
+```typescript
+// Bad - avoid Title Case
+'Copy Image'
+'Remove Custom Size'
+'Open In New Tab'
+
+// Bad - avoid ALL CAPS
+'COPY IMAGE'
+```
+
+✅ **Do use sentence case:**
+```typescript
+// Good - sentence case
+'Copy image'
+'Remove custom size'
+'Open in new tab'
+```
+
+**Exceptions:**
+- Proper nouns keep their capitalization (e.g., 'Finder', 'Explorer', 'Photoshop')
+- Acronyms remain capitalized (e.g., 'CMD', 'CTRL', 'URL')
+- Operating system names (e.g., 'macOS', 'Windows')
+
+**Examples:**
+- ✅ 'Show in Finder' (Finder is a proper noun)
+- ✅ 'CMD + click behavior' (CMD is an acronym)
+- ✅ 'External editor path (macOS)' (macOS is a proper noun with specific casing)
