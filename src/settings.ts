@@ -11,7 +11,7 @@ export interface PixelPerfectImageSettings {
 	showOpenInDefaultApp: boolean;
 	showPercentageResize: boolean;
 	customResizeWidths: number[];  // in pixels (empty array means disabled)
-	cmdCtrlClickBehavior: 'open-in-new-tab' | 'open-in-default-app';
+	cmdCtrlClickBehavior: 'open-in-new-tab' | 'open-in-default-app' | 'open-in-external-editor';
 
 	// Mousewheel zoom settings
 	enableWheelZoom: boolean;
@@ -168,6 +168,7 @@ export class PixelPerfectImageSettingTab extends PluginSettingTab {
 			.addDropdown(dropdown => dropdown
 				.addOption('open-in-new-tab', 'Open in new tab')
 				.addOption('open-in-default-app', 'Open in default app')
+				.addOption('open-in-external-editor', 'Open in external editor')
 				.setValue(this.plugin.settings.cmdCtrlClickBehavior)
 				.onChange(async (value: 'open-in-new-tab' | 'open-in-default-app') => {
 					this.plugin.settings.cmdCtrlClickBehavior = value;
